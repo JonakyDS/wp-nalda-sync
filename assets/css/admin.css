@@ -1,0 +1,570 @@
+/**
+ * WP Nalda Sync Admin Styles
+ *
+ * @package WP_Nalda_Sync
+ */
+
+/* ==========================================================================
+   General Admin Styles
+   ========================================================================== */
+
+.wpns-admin-wrap {
+    max-width: 1400px;
+}
+
+.wpns-admin-wrap h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.wpns-admin-wrap h1 .dashicons {
+    font-size: 28px;
+    width: 28px;
+    height: 28px;
+}
+
+/* ==========================================================================
+   Status Cards
+   ========================================================================== */
+
+.wpns-status-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.wpns-card {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+.wpns-card h3 {
+    margin: 0 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f1;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1d2327;
+}
+
+.wpns-card p {
+    margin: 8px 0;
+    color: #50575e;
+}
+
+.wpns-card p strong {
+    color: #1d2327;
+}
+
+.wpns-card .description {
+    font-size: 12px;
+    color: #787c82;
+    font-style: italic;
+}
+
+/* Status Indicator */
+.wpns-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 15px;
+    border-radius: 4px;
+    font-weight: 500;
+}
+
+.wpns-status-indicator.active {
+    background: #edfaef;
+    color: #00a32a;
+}
+
+.wpns-status-indicator.inactive {
+    background: #f6f7f7;
+    color: #787c82;
+}
+
+.wpns-status-indicator .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+}
+
+.wpns-status-indicator.active .status-dot {
+    background: #00a32a;
+    box-shadow: 0 0 0 3px rgba(0, 163, 42, 0.2);
+}
+
+.wpns-status-indicator.inactive .status-dot {
+    background: #787c82;
+}
+
+.wpns-card .next-run {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #f0f0f1;
+}
+
+/* Badge Styles */
+.wpns-badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.wpns-badge.success {
+    background: #edfaef;
+    color: #00a32a;
+}
+
+.wpns-badge.failed,
+.wpns-badge.error {
+    background: #fcf0f1;
+    color: #d63638;
+}
+
+.wpns-badge.info {
+    background: #f0f6fc;
+    color: #2271b1;
+}
+
+.wpns-badge.warning {
+    background: #fcf9e8;
+    color: #996800;
+}
+
+/* Quick Actions Card */
+.wpns-card-actions {
+    display: flex;
+    flex-direction: column;
+}
+
+.wpns-card-actions button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 10px 15px;
+}
+
+.wpns-card-actions button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.wpns-card-actions button:last-of-type {
+    margin-bottom: 0;
+}
+
+.wpns-action-result {
+    margin-top: 15px;
+    padding: 12px 15px;
+    border-radius: 4px;
+    display: none;
+}
+
+.wpns-action-result.success {
+    background: #edfaef;
+    color: #00a32a;
+    border: 1px solid #00a32a;
+    display: block;
+}
+
+.wpns-action-result.error {
+    background: #fcf0f1;
+    color: #d63638;
+    border: 1px solid #d63638;
+    display: block;
+}
+
+.wpns-action-result.loading {
+    background: #f0f6fc;
+    color: #2271b1;
+    border: 1px solid #2271b1;
+    display: block;
+}
+
+/* ==========================================================================
+   Settings Form
+   ========================================================================== */
+
+.wpns-settings-form {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px;
+}
+
+.wpns-settings-form h2 {
+    font-size: 16px;
+    margin: 30px 0 15px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.wpns-settings-form h2:first-of-type {
+    margin-top: 0;
+}
+
+.wpns-settings-form .form-table th {
+    width: 220px;
+    padding: 15px 10px 15px 0;
+}
+
+.wpns-settings-form .form-table td {
+    padding: 15px 10px;
+}
+
+.wpns-settings-form .form-table input.regular-text {
+    width: 100%;
+    max-width: 400px;
+}
+
+.wpns-settings-form .form-table select {
+    width: 100%;
+    max-width: 400px;
+}
+
+.wpns-settings-form .description {
+    margin-top: 8px;
+    color: #646970;
+}
+
+/* Password Field */
+.wpns-password-field {
+    display: flex;
+    gap: 5px;
+    max-width: 400px;
+}
+
+.wpns-password-field input {
+    flex: 1;
+}
+
+.wpns-password-field .button {
+    padding: 0 10px;
+}
+
+/* Toggle Switch */
+.wpns-toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 50px;
+    height: 26px;
+}
+
+.wpns-toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.wpns-toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #c3c4c7;
+    transition: 0.3s;
+    border-radius: 26px;
+}
+
+.wpns-toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 20px;
+    width: 20px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.wpns-toggle-switch input:checked+.wpns-toggle-slider {
+    background-color: #2271b1;
+}
+
+.wpns-toggle-switch input:checked+.wpns-toggle-slider:before {
+    transform: translateX(24px);
+}
+
+.wpns-toggle-switch input:focus+.wpns-toggle-slider {
+    box-shadow: 0 0 0 2px #2271b1;
+}
+
+/* ==========================================================================
+   Logs Page
+   ========================================================================== */
+
+.wpns-logs-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px 20px;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.wpns-logs-filters {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.wpns-log-filter {
+    min-width: 150px;
+}
+
+.wpns-logs-container {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+}
+
+.wpns-logs-table {
+    border: none;
+    margin: 0;
+}
+
+.wpns-logs-table th,
+.wpns-logs-table td {
+    padding: 12px 15px;
+}
+
+.wpns-logs-table .column-time {
+    width: 160px;
+}
+
+.wpns-logs-table .column-level {
+    width: 100px;
+}
+
+.wpns-logs-table .column-context {
+    width: 100px;
+}
+
+.wpns-logs-table .no-items td {
+    text-align: center;
+    padding: 40px;
+    color: #787c82;
+}
+
+.wpns-log-row.hidden {
+    display: none;
+}
+
+/* ==========================================================================
+   Modal
+   ========================================================================== */
+
+.wpns-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 100100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wpns-modal-content {
+    background: #fff;
+    border-radius: 4px;
+    max-width: 800px;
+    width: 90%;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+}
+
+.wpns-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.wpns-modal-header h2 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.wpns-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #787c82;
+    padding: 0;
+    line-height: 1;
+}
+
+.wpns-modal-close:hover {
+    color: #d63638;
+}
+
+.wpns-modal-body {
+    padding: 20px;
+    overflow: auto;
+    flex: 1;
+}
+
+.wpns-modal-body pre {
+    background: #f6f7f7;
+    padding: 15px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+
+@media screen and (max-width: 782px) {
+    .wpns-status-cards {
+        grid-template-columns: 1fr;
+    }
+
+    .wpns-settings-form .form-table th {
+        width: auto;
+        display: block;
+        padding-bottom: 5px;
+    }
+
+    .wpns-settings-form .form-table td {
+        display: block;
+        padding-top: 5px;
+    }
+
+    .wpns-logs-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .wpns-logs-filters {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+
+    .wpns-log-filter {
+        flex: 1;
+        min-width: 120px;
+    }
+
+    .wpns-logs-table .column-time {
+        width: 120px;
+    }
+
+    .wpns-logs-table .column-context {
+        display: none;
+    }
+}
+
+/* ==========================================================================
+   Animations
+   ========================================================================== */
+
+@keyframes wpns-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.wpns-spinning {
+    animation: wpns-spin 1s linear infinite;
+}
+
+/* Loading State */
+.wpns-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.wpns-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #2271b1;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: wpns-spin 0.8s linear infinite;
+}
+
+/* ==========================================================================
+   Utility Classes
+   ========================================================================== */
+
+.wpns-text-success {
+    color: #00a32a;
+}
+
+.wpns-text-error {
+    color: #d63638;
+}
+
+.wpns-text-warning {
+    color: #996800;
+}
+
+.wpns-text-info {
+    color: #2271b1;
+}
+
+.wpns-text-muted {
+    color: #787c82;
+}
+
+.wpns-mt-0 {
+    margin-top: 0;
+}
+
+.wpns-mt-1 {
+    margin-top: 10px;
+}
+
+.wpns-mt-2 {
+    margin-top: 20px;
+}
+
+.wpns-mb-0 {
+    margin-bottom: 0;
+}
+
+.wpns-mb-1 {
+    margin-bottom: 10px;
+}
+
+.wpns-mb-2 {
+    margin-bottom: 20px;
+}
