@@ -542,7 +542,8 @@ class WPNS_Admin {
             return;
         }
 
-        $logs = $this->logger->get_logs( 100 );
+        $logs       = $this->logger->get_logs( 100 );
+        $log_counts = $this->logger->get_log_counts();
         ?>
         <div class="wrap wpns-admin-wrap">
             <h1>
@@ -552,6 +553,7 @@ class WPNS_Admin {
 
             <div class="wpns-logs-header">
                 <div class="wpns-logs-filters">
+                    <label for="wpns-log-filter"><?php esc_html_e( 'Filter:', 'wp-nalda-sync' ); ?></label>
                     <select id="wpns-log-filter" class="wpns-log-filter">
                         <option value=""><?php esc_html_e( 'All Levels', 'wp-nalda-sync' ); ?></option>
                         <option value="info"><?php esc_html_e( 'Info', 'wp-nalda-sync' ); ?></option>
@@ -563,6 +565,21 @@ class WPNS_Admin {
                         <span class="dashicons dashicons-update"></span>
                         <?php esc_html_e( 'Refresh', 'wp-nalda-sync' ); ?>
                     </button>
+                    
+                    <div class="wpns-logs-stats">
+                        <span class="wpns-logs-stat info">
+                            <span class="count"><?php echo esc_html( $log_counts['info'] ?? 0 ); ?></span> Info
+                        </span>
+                        <span class="wpns-logs-stat success">
+                            <span class="count"><?php echo esc_html( $log_counts['success'] ?? 0 ); ?></span> Success
+                        </span>
+                        <span class="wpns-logs-stat warning">
+                            <span class="count"><?php echo esc_html( $log_counts['warning'] ?? 0 ); ?></span> Warning
+                        </span>
+                        <span class="wpns-logs-stat error">
+                            <span class="count"><?php echo esc_html( $log_counts['error'] ?? 0 ); ?></span> Error
+                        </span>
+                    </div>
                 </div>
                 <button type="button" id="wpns-clear-logs" class="button button-secondary">
                     <span class="dashicons dashicons-trash"></span>
@@ -571,25 +588,28 @@ class WPNS_Admin {
             </div>
 
             <div class="wpns-logs-container">
-                <table class="wp-list-table widefat fixed striped wpns-logs-table">
+                <table class="wpns-logs-table">
                     <thead>
                         <tr>
-                            <th class="column-time"><?php esc_html_e( 'Time', 'wp-nalda-sync' ); ?></th>
+                            <th class="column-time"><?php esc_html_e( 'Timestamp', 'wp-nalda-sync' ); ?></th>
                             <th class="column-level"><?php esc_html_e( 'Level', 'wp-nalda-sync' ); ?></th>
                             <th class="column-message"><?php esc_html_e( 'Message', 'wp-nalda-sync' ); ?></th>
-                            <th class="column-context"><?php esc_html_e( 'Context', 'wp-nalda-sync' ); ?></th>
+                            <th class="column-context"><?php esc_html_e( 'Details', 'wp-nalda-sync' ); ?></th>
                         </tr>
                     </thead>
                     <tbody id="wpns-logs-body">
                         <?php if ( empty( $logs ) ) : ?>
                             <tr class="no-items">
-                                <td colspan="4"><?php esc_html_e( 'No logs found.', 'wp-nalda-sync' ); ?></td>
+                                <td colspan="4"><?php esc_html_e( 'No logs found. Run a sync to see activity here.', 'wp-nalda-sync' ); ?></td>
                             </tr>
                         <?php else : ?>
-                            <?php foreach ( $logs as $log ) : ?>
+                            <?php foreach ( $logs as $log ) : 
+                                $timestamp = strtotime( $log->timestamp );
+                            ?>
                                 <tr class="wpns-log-row" data-level="<?php echo esc_attr( $log->level ); ?>">
                                     <td class="column-time">
-                                        <?php echo esc_html( wp_date( 'Y-m-d H:i:s', strtotime( $log->timestamp ) ) ); ?>
+                                        <span class="log-date"><?php echo esc_html( wp_date( 'M j, Y', $timestamp ) ); ?></span>
+                                        <span class="log-time"><?php echo esc_html( wp_date( 'H:i:s', $timestamp ) ); ?></span>
                                     </td>
                                     <td class="column-level">
                                         <span class="wpns-badge <?php echo esc_attr( $log->level ); ?>">
@@ -601,8 +621,11 @@ class WPNS_Admin {
                                         <?php if ( ! empty( $log->context ) ) : ?>
                                             <button type="button" class="button button-small wpns-view-context" 
                                                     data-context="<?php echo esc_attr( $log->context ); ?>">
+                                                <span class="dashicons dashicons-visibility"></span>
                                                 <?php esc_html_e( 'View', 'wp-nalda-sync' ); ?>
                                             </button>
+                                        <?php else : ?>
+                                            <span class="wpns-text-muted">—</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -610,13 +633,26 @@ class WPNS_Admin {
                         <?php endif; ?>
                     </tbody>
                 </table>
+                <?php if ( ! empty( $logs ) ) : ?>
+                <div class="wpns-logs-footer">
+                    <span class="wpns-logs-count">
+                        <?php 
+                        printf( 
+                            esc_html__( 'Showing %d of %d total logs', 'wp-nalda-sync' ), 
+                            count( $logs ), 
+                            $log_counts['total'] ?? count( $logs ) 
+                        ); 
+                        ?>
+                    </span>
+                </div>
+                <?php endif; ?>
             </div>
 
             <!-- Context Modal -->
             <div id="wpns-context-modal" class="wpns-modal" style="display: none;">
                 <div class="wpns-modal-content">
                     <div class="wpns-modal-header">
-                        <h2><?php esc_html_e( 'Log Context', 'wp-nalda-sync' ); ?></h2>
+                        <h2><?php esc_html_e( 'Log Details', 'wp-nalda-sync' ); ?></h2>
                         <button type="button" class="wpns-modal-close">&times;</button>
                     </div>
                     <div class="wpns-modal-body">
@@ -852,13 +888,15 @@ class WPNS_Admin {
 
         ob_start();
         if ( empty( $logs ) ) {
-            echo '<tr class="no-items"><td colspan="4">' . esc_html__( 'No logs found.', 'wp-nalda-sync' ) . '</td></tr>';
+            echo '<tr class="no-items"><td colspan="4">' . esc_html__( 'No logs found. Run a sync to see activity here.', 'wp-nalda-sync' ) . '</td></tr>';
         } else {
             foreach ( $logs as $log ) {
+                $timestamp = strtotime( $log->timestamp );
                 ?>
                 <tr class="wpns-log-row" data-level="<?php echo esc_attr( $log->level ); ?>">
                     <td class="column-time">
-                        <?php echo esc_html( wp_date( 'Y-m-d H:i:s', strtotime( $log->timestamp ) ) ); ?>
+                        <span class="log-date"><?php echo esc_html( wp_date( 'M j, Y', $timestamp ) ); ?></span>
+                        <span class="log-time"><?php echo esc_html( wp_date( 'H:i:s', $timestamp ) ); ?></span>
                     </td>
                     <td class="column-level">
                         <span class="wpns-badge <?php echo esc_attr( $log->level ); ?>">
@@ -870,8 +908,11 @@ class WPNS_Admin {
                         <?php if ( ! empty( $log->context ) ) : ?>
                             <button type="button" class="button button-small wpns-view-context" 
                                     data-context="<?php echo esc_attr( $log->context ); ?>">
+                                <span class="dashicons dashicons-visibility"></span>
                                 <?php esc_html_e( 'View', 'wp-nalda-sync' ); ?>
                             </button>
+                        <?php else : ?>
+                            <span class="wpns-text-muted">—</span>
                         <?php endif; ?>
                     </td>
                 </tr>
