@@ -598,6 +598,15 @@ class WPNS_CSV_Generator {
      * @return string
      */
     private function get_product_gtin( $product, $parent_product = null ) {
+        // First try WooCommerce native GTIN field (available since WC 9.2)
+        if ( method_exists( $product, 'get_global_unique_id' ) ) {
+            $gtin = $product->get_global_unique_id();
+            if ( ! empty( $gtin ) ) {
+                return $gtin;
+            }
+        }
+
+        // Meta keys to check for GTIN (excluding _global_unique_id which is internal)
         $gtin_keys = array(
             '_gtin',
             'gtin',
@@ -609,7 +618,6 @@ class WPNS_CSV_Generator {
             'upc',
             '_barcode',
             'barcode',
-            '_global_unique_id', // WooCommerce native GTIN field
             '_wpm_gtin_code',    // WooCommerce Product Manager
             'hwp_product_gtin',  // FLAVOR / flavor
         );
@@ -623,6 +631,14 @@ class WPNS_CSV_Generator {
 
         // Check parent product for variations
         if ( $parent_product ) {
+            // First try native GTIN on parent
+            if ( method_exists( $parent_product, 'get_global_unique_id' ) ) {
+                $gtin = $parent_product->get_global_unique_id();
+                if ( ! empty( $gtin ) ) {
+                    return $gtin;
+                }
+            }
+
             foreach ( $gtin_keys as $key ) {
                 $value = $parent_product->get_meta( $key );
                 if ( ! empty( $value ) ) {
