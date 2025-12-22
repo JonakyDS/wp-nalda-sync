@@ -354,11 +354,18 @@
             const context = $(e.currentTarget).data('context');
             let formattedContext;
 
-            try {
-                const parsed = JSON.parse(context);
-                formattedContext = JSON.stringify(parsed, null, 2);
-            } catch (err) {
-                formattedContext = context;
+            // jQuery's .data() auto-parses JSON, so context may already be an object
+            if (typeof context === 'object' && context !== null) {
+                formattedContext = JSON.stringify(context, null, 2);
+            } else if (typeof context === 'string') {
+                try {
+                    const parsed = JSON.parse(context);
+                    formattedContext = JSON.stringify(parsed, null, 2);
+                } catch (err) {
+                    formattedContext = context;
+                }
+            } else {
+                formattedContext = String(context);
             }
 
             $('#wpns-context-content').text(formattedContext);
