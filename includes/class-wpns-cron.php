@@ -171,6 +171,21 @@ class WPNS_Cron {
      * Execute the sync (cron handler)
      */
     public function execute_sync() {
+        // Increase execution time for scheduled runs
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 300 ); // 5 minutes
+        }
+
+        // Increase memory limit if possible
+        if ( function_exists( 'wp_raise_memory_limit' ) ) {
+            wp_raise_memory_limit( 'cron' );
+        }
+
+        // Disable user abort for cron
+        if ( function_exists( 'ignore_user_abort' ) ) {
+            @ignore_user_abort( true );
+        }
+
         $this->run_sync( 'scheduled' );
     }
 
@@ -186,94 +201,123 @@ class WPNS_Cron {
         // Start a new run and get the run ID
         $run_id = $this->logger->start_run( $trigger );
 
-        // Check if WooCommerce is active
-        if ( ! class_exists( 'WooCommerce' ) ) {
-            $message = __( 'WooCommerce is not active.', 'wp-nalda-sync' );
-            $this->logger->log_sync_failure( $message );
-            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
-            return array(
-                'success' => false,
-                'message' => $message,
+        try {
+            // Check if WooCommerce is active
+            if ( ! class_exists( 'WooCommerce' ) ) {
+                $message = __( 'WooCommerce is not active.', 'wp-nalda-sync' );
+                $this->logger->log_sync_failure( $message );
+                $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+                return array(
+                    'success' => false,
+                    'message' => $message,
+                );
+            }
+
+            // Check settings
+            $settings = get_option( 'wpns_settings', array() );
+
+            if ( empty( $settings['sftp_host'] ) || empty( $settings['sftp_username'] ) ) {
+                $message = __( 'SFTP settings are not configured.', 'wp-nalda-sync' );
+                $this->logger->log_sync_failure( $message );
+                $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+                return array(
+                    'success' => false,
+                    'message' => $message,
+                );
+            }
+
+            // Generate CSV
+            $this->logger->info( __( 'Generating CSV file...', 'wp-nalda-sync' ) );
+            $csv_result = $this->csv_generator->generate();
+
+            if ( ! $csv_result['success'] ) {
+                $this->logger->log_sync_failure( $csv_result['message'] );
+                $this->update_last_run( 'failed', 0 );
+                $this->logger->end_run( 'failed', array( 'reason' => $csv_result['message'] ) );
+                return array(
+                    'success' => false,
+                    'message' => $csv_result['message'],
+                );
+            }
+
+            // Upload to SFTP
+            $this->logger->info( __( 'Uploading CSV to SFTP server...', 'wp-nalda-sync' ) );
+            $upload_result = $this->sftp_uploader->upload( $csv_result['filepath'] );
+
+            // Get file size before cleanup
+            $file_size = file_exists( $csv_result['filepath'] ) ? filesize( $csv_result['filepath'] ) : 0;
+
+            // Cleanup temp file after upload (regardless of success/failure)
+            $this->csv_generator->cleanup_temp_file( $csv_result['filepath'] );
+
+            if ( ! $upload_result['success'] ) {
+                $this->logger->log_sync_failure( $upload_result['message'] );
+                $this->update_last_run( 'failed', $csv_result['exported_count'] ?? 0 );
+                $this->logger->end_run( 'failed', array( 'reason' => $upload_result['message'] ) );
+                return array(
+                    'success' => false,
+                    'message' => $upload_result['message'],
+                );
+            }
+
+            // Calculate duration
+            $duration = round( microtime( true ) - $start_time, 2 );
+
+            // Log success
+            $stats = array(
+                'trigger'          => $trigger,
+                'products_exported' => $csv_result['exported_count'] ?? 0,
+                'products_skipped'  => $csv_result['skipped_count'] ?? 0,
+                'file_size'         => $file_size,
+                'remote_path'       => $upload_result['remote_path'] ?? '',
+                'duration_seconds'  => $duration,
             );
-        }
 
-        // Check settings
-        $settings = get_option( 'wpns_settings', array() );
+            // Update last run info
+            $this->update_last_run( 'success', $csv_result['exported_count'] ?? 0, $stats );
 
-        if ( empty( $settings['sftp_host'] ) || empty( $settings['sftp_username'] ) ) {
-            $message = __( 'SFTP settings are not configured.', 'wp-nalda-sync' );
-            $this->logger->log_sync_failure( $message );
-            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
-            return array(
-                'success' => false,
-                'message' => $message,
+            // End the run with success
+            $this->logger->end_run( 'success', $stats );
+
+            $message = sprintf(
+                __( 'Sync completed successfully. Exported %d products in %s seconds.', 'wp-nalda-sync' ),
+                $csv_result['exported_count'],
+                $duration
             );
-        }
 
-        // Generate CSV
-        $this->logger->info( __( 'Generating CSV file...', 'wp-nalda-sync' ) );
-        $csv_result = $this->csv_generator->generate();
+            return array(
+                'success' => true,
+                'message' => $message,
+                'stats'   => $stats,
+            );
 
-        if ( ! $csv_result['success'] ) {
-            $this->logger->log_sync_failure( $csv_result['message'] );
+        } catch ( Exception $e ) {
+            $message = sprintf( __( 'Sync failed with exception: %s', 'wp-nalda-sync' ), $e->getMessage() );
+            $this->logger->error( $message, array(
+                'exception' => $e->getMessage(),
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ) );
+            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
             $this->update_last_run( 'failed', 0 );
-            $this->logger->end_run( 'failed', array( 'reason' => $csv_result['message'] ) );
             return array(
                 'success' => false,
-                'message' => $csv_result['message'],
+                'message' => $message,
             );
-        }
-
-        // Upload to SFTP
-        $this->logger->info( __( 'Uploading CSV to SFTP server...', 'wp-nalda-sync' ) );
-        $upload_result = $this->sftp_uploader->upload( $csv_result['filepath'] );
-
-        // Get file size before cleanup
-        $file_size = file_exists( $csv_result['filepath'] ) ? filesize( $csv_result['filepath'] ) : 0;
-
-        // Cleanup temp file after upload (regardless of success/failure)
-        $this->csv_generator->cleanup_temp_file( $csv_result['filepath'] );
-
-        if ( ! $upload_result['success'] ) {
-            $this->logger->log_sync_failure( $upload_result['message'] );
-            $this->update_last_run( 'failed', $csv_result['exported_count'] ?? 0 );
-            $this->logger->end_run( 'failed', array( 'reason' => $upload_result['message'] ) );
+        } catch ( Error $e ) {
+            $message = sprintf( __( 'Sync failed with error: %s', 'wp-nalda-sync' ), $e->getMessage() );
+            $this->logger->error( $message, array(
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+            ) );
+            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+            $this->update_last_run( 'failed', 0 );
             return array(
                 'success' => false,
-                'message' => $upload_result['message'],
+                'message' => $message,
             );
         }
-
-        // Calculate duration
-        $duration = round( microtime( true ) - $start_time, 2 );
-
-        // Log success
-        $stats = array(
-            'trigger'          => $trigger,
-            'products_exported' => $csv_result['exported_count'] ?? 0,
-            'products_skipped'  => $csv_result['skipped_count'] ?? 0,
-            'file_size'         => $file_size,
-            'remote_path'       => $upload_result['remote_path'] ?? '',
-            'duration_seconds'  => $duration,
-        );
-
-        // Update last run info
-        $this->update_last_run( 'success', $csv_result['exported_count'] ?? 0, $stats );
-
-        // End the run with success
-        $this->logger->end_run( 'success', $stats );
-
-        $message = sprintf(
-            __( 'Sync completed successfully. Exported %d products in %s seconds.', 'wp-nalda-sync' ),
-            $csv_result['exported_count'],
-            $duration
-        );
-
-        return array(
-            'success' => true,
-            'message' => $message,
-            'stats'   => $stats,
-        );
     }
 
     /**
