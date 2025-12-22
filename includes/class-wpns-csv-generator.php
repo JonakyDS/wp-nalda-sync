@@ -507,9 +507,8 @@ class WPNS_CSV_Generator {
             return false;
         }
 
-        // Calculate tax amount
+        // Get tax rate (the CSV expects the tax rate value, not calculated amount)
         $tax_rate = $this->wc_settings['tax_rate'];
-        $tax_amount = round( floatval( $price ) * ( $tax_rate / 100 ), 2 );
 
         // Get product dimensions (convert to mm if needed)
         $length = $this->convert_to_mm( $product->get_length() );
@@ -554,7 +553,7 @@ class WPNS_CSV_Generator {
             $this->wc_settings['country_code'],                            // country
             $condition,                                                     // condition
             round( floatval( $price ), 2 ),                                // price
-            $tax_amount,                                                    // tax
+            $tax_rate,                                                      // tax (tax rate percentage)
             $this->wc_settings['currency'],                                // currency
             $this->plugin_settings['delivery_time'] ?? 3,                  // delivery_time_days
             $product->get_stock_quantity() ?: 0,                           // stock
