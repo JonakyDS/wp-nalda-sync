@@ -132,31 +132,23 @@ class WPNS_CSV_Generator {
 
         // Generate filename
         $filename = $this->generate_filename();
-        $exports_dir = WP_Nalda_Sync::get_exports_dir();
         
-        // Ensure exports directory exists
-        if ( ! file_exists( $exports_dir ) ) {
-            wp_mkdir_p( $exports_dir );
-            file_put_contents( $exports_dir . '/index.php', '<?php // Silence is golden' );
-        }
-        
-        $filepath = $exports_dir . '/' . $filename;
+        // Use WordPress temp directory (always writable)
+        $temp_dir = get_temp_dir();
+        $filepath = $temp_dir . $filename;
 
         // Create CSV file
         $handle = fopen( $filepath, 'w' );
         if ( ! $handle ) {
-            $message = sprintf( 
-                __( 'Failed to create CSV file. Path: %s', 'wp-nalda-sync' ), 
-                $filepath 
-            );
+            $message = __( 'Failed to create CSV file in temp directory.', 'wp-nalda-sync' );
             $this->logger->error( $message, array(
                 'filepath' => $filepath,
-                'exports_dir_exists' => file_exists( $exports_dir ),
-                'exports_dir_writable' => is_writable( $exports_dir ),
+                'temp_dir' => $temp_dir,
+                'temp_dir_writable' => is_writable( $temp_dir ),
             ) );
             return array(
                 'success' => false,
-                'message' => __( 'Failed to create CSV file.', 'wp-nalda-sync' ),
+                'message' => $message,
             );
         }
 
@@ -221,10 +213,6 @@ class WPNS_CSV_Generator {
             );
         }
 
-        // Generate file URL
-        $upload_dir = wp_upload_dir();
-        $file_url   = $upload_dir['baseurl'] . '/wp-nalda-sync/exports/' . $filename;
-
         $message = sprintf(
             __( 'CSV generated successfully. Exported %d products, skipped %d products.', 'wp-nalda-sync' ),
             $exported_count,
@@ -242,10 +230,20 @@ class WPNS_CSV_Generator {
             'message'          => $message,
             'filepath'         => $filepath,
             'filename'         => $filename,
-            'file_url'         => $file_url,
             'exported_count'   => $exported_count,
             'skipped_count'    => $this->skipped_count,
         );
+    }
+
+    /**
+     * Delete temporary CSV file after upload
+     *
+     * @param string $filepath Path to the temp file.
+     */
+    public function cleanup_temp_file( $filepath ) {
+        if ( file_exists( $filepath ) && strpos( $filepath, get_temp_dir() ) === 0 ) {
+            @unlink( $filepath );
+        }
     }
 
     /**

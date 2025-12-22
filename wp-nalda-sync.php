@@ -161,35 +161,6 @@ final class WP_Nalda_Sync {
      * Plugin activation
      */
     public function activate() {
-        // Create upload directory
-        $upload_dir = wp_upload_dir();
-        $wpns_dir   = $upload_dir['basedir'] . '/wp-nalda-sync';
-
-        if ( ! file_exists( $wpns_dir ) ) {
-            wp_mkdir_p( $wpns_dir );
-
-            // Create .htaccess to protect directory
-            $htaccess_content = "Order deny,allow\nDeny from all";
-            file_put_contents( $wpns_dir . '/.htaccess', $htaccess_content );
-
-            // Create index.php
-            file_put_contents( $wpns_dir . '/index.php', '<?php // Silence is golden' );
-        }
-
-        // Create logs directory
-        $logs_dir = $wpns_dir . '/logs';
-        if ( ! file_exists( $logs_dir ) ) {
-            wp_mkdir_p( $logs_dir );
-            file_put_contents( $logs_dir . '/index.php', '<?php // Silence is golden' );
-        }
-
-        // Create exports directory
-        $exports_dir = $wpns_dir . '/exports';
-        if ( ! file_exists( $exports_dir ) ) {
-            wp_mkdir_p( $exports_dir );
-            file_put_contents( $exports_dir . '/index.php', '<?php // Silence is golden' );
-        }
-
         // Set default options
         $default_options = array(
             'sftp_host'        => '',

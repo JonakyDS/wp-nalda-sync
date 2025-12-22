@@ -217,6 +217,12 @@ class WPNS_Cron {
         $this->logger->info( __( 'Uploading CSV to SFTP server...', 'wp-nalda-sync' ) );
         $upload_result = $this->sftp_uploader->upload( $csv_result['filepath'] );
 
+        // Get file size before cleanup
+        $file_size = file_exists( $csv_result['filepath'] ) ? filesize( $csv_result['filepath'] ) : 0;
+
+        // Cleanup temp file after upload (regardless of success/failure)
+        $this->csv_generator->cleanup_temp_file( $csv_result['filepath'] );
+
         if ( ! $upload_result['success'] ) {
             $this->logger->log_sync_failure( $upload_result['message'] );
             $this->update_last_run( 'failed', $csv_result['exported_count'] ?? 0 );
@@ -227,9 +233,6 @@ class WPNS_Cron {
             );
         }
 
-        // Cleanup old exports
-        $this->csv_generator->cleanup_old_exports( 5 );
-
         // Calculate duration
         $duration = round( microtime( true ) - $start_time, 2 );
 
@@ -238,7 +241,7 @@ class WPNS_Cron {
             'trigger'          => $trigger,
             'products_exported' => $csv_result['exported_count'] ?? 0,
             'products_skipped'  => $csv_result['skipped_count'] ?? 0,
-            'file_size'         => filesize( $csv_result['filepath'] ),
+            'file_size'         => $file_size,
             'remote_path'       => $upload_result['remote_path'] ?? '',
             'duration_seconds'  => $duration,
         );
