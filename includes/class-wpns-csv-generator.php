@@ -273,6 +273,148 @@ class WPNS_CSV_Generator {
     }
 
     /**
+     * Generate CSV for download/preview (saves to web-accessible uploads directory)
+     *
+     * @return array Result array with success status, message, file_url, and file info.
+     */
+    public function generate_for_download() {
+        $this->logger->info( __( 'Starting CSV generation for download', 'wp-nalda-sync' ) );
+
+        // Reset counters
+        $this->skipped_count    = 0;
+        $this->skipped_products = array();
+
+        // Load settings
+        $this->load_settings();
+
+        // Get products
+        $products = $this->get_products();
+
+        if ( empty( $products ) ) {
+            $message = __( 'No products found to export.', 'wp-nalda-sync' );
+            $this->logger->warning( $message );
+            return array(
+                'success' => false,
+                'message' => $message,
+            );
+        }
+
+        // Generate filename
+        $filename = $this->generate_filename();
+        
+        // Get WordPress uploads directory
+        $upload_dir = wp_upload_dir();
+        $wpns_dir   = trailingslashit( $upload_dir['basedir'] ) . 'wpns-downloads/';
+        $wpns_url   = trailingslashit( $upload_dir['baseurl'] ) . 'wpns-downloads/';
+
+        // Create directory if it doesn't exist
+        if ( ! is_dir( $wpns_dir ) ) {
+            wp_mkdir_p( $wpns_dir );
+            // Add index.php for security
+            file_put_contents( $wpns_dir . 'index.php', '<?php // Silence is golden' );
+            // Add .htaccess to prevent directory listing
+            file_put_contents( $wpns_dir . '.htaccess', 'Options -Indexes' );
+        }
+
+        // Clean up old download files (older than 1 hour)
+        $this->cleanup_old_downloads( $wpns_dir );
+
+        $filepath = $wpns_dir . $filename;
+        $file_url = $wpns_url . $filename;
+
+        $handle = @fopen( $filepath, 'w' );
+        if ( ! $handle ) {
+            $message = __( 'Failed to create CSV file for download. Please check server permissions.', 'wp-nalda-sync' );
+            $this->logger->error( $message, array(
+                'filepath'   => $filepath,
+                'upload_dir' => $wpns_dir,
+            ) );
+            return array(
+                'success' => false,
+                'message' => $message,
+            );
+        }
+
+        // Add UTF-8 BOM for Excel compatibility
+        fwrite( $handle, "\xEF\xBB\xBF" );
+
+        // Write headers
+        fputcsv( $handle, $this->headers );
+
+        // Process products
+        $exported_count = 0;
+
+        foreach ( $products as $product_id ) {
+            $product = wc_get_product( $product_id );
+
+            if ( ! $product ) {
+                continue;
+            }
+
+            // Handle variable products - export each variation
+            if ( $product->is_type( 'variable' ) ) {
+                $variations = $product->get_available_variations();
+                foreach ( $variations as $variation_data ) {
+                    $variation = wc_get_product( $variation_data['variation_id'] );
+                    if ( $variation ) {
+                        $row = $this->prepare_product_row( $variation, $product );
+                        if ( $row ) {
+                            fputcsv( $handle, $row );
+                            $exported_count++;
+                        }
+                    }
+                }
+            } else {
+                $row = $this->prepare_product_row( $product );
+                if ( $row ) {
+                    fputcsv( $handle, $row );
+                    $exported_count++;
+                }
+            }
+        }
+
+        fclose( $handle );
+
+        $message = sprintf(
+            __( 'CSV generated successfully. Exported %d products, skipped %d products.', 'wp-nalda-sync' ),
+            $exported_count,
+            $this->skipped_count
+        );
+
+        $this->logger->success( $message );
+
+        return array(
+            'success'        => true,
+            'message'        => $message,
+            'filepath'       => $filepath,
+            'filename'       => $filename,
+            'file_url'       => $file_url,
+            'exported_count' => $exported_count,
+            'skipped_count'  => $this->skipped_count,
+        );
+    }
+
+    /**
+     * Clean up old download files
+     *
+     * @param string $directory Directory to clean.
+     */
+    private function cleanup_old_downloads( $directory ) {
+        $files = glob( $directory . 'nalda-products-*.csv' );
+        if ( ! $files ) {
+            return;
+        }
+
+        $one_hour_ago = time() - HOUR_IN_SECONDS;
+
+        foreach ( $files as $file ) {
+            if ( filemtime( $file ) < $one_hour_ago ) {
+                @unlink( $file );
+            }
+        }
+    }
+
+    /**
      * Delete temporary CSV file after upload
      *
      * @param string $filepath Path to the temp file.

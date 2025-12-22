@@ -1048,7 +1048,8 @@ class WPNS_Admin {
             wp_send_json_error( __( 'Permission denied.', 'wp-nalda-sync' ) );
         }
 
-        $result = $this->csv_generator->generate();
+        // Use generate_for_download which saves to a web-accessible location
+        $result = $this->csv_generator->generate_for_download();
 
         if ( $result['success'] ) {
             wp_send_json_success( array(
