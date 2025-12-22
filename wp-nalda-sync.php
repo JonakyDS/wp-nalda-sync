@@ -31,6 +31,23 @@ define( 'WPNS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'WPNS_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
 
 /**
+ * Decrypt password - global helper function available in all contexts
+ *
+ * @param string $encrypted_password Encrypted password.
+ * @return string Decrypted password.
+ */
+function wpns_decrypt_password( $encrypted_password ) {
+    if ( empty( $encrypted_password ) ) {
+        return '';
+    }
+
+    $key = wp_salt( 'auth' );
+    $iv  = substr( hash( 'sha256', wp_salt( 'secure_auth' ) ), 0, 16 );
+
+    return openssl_decrypt( base64_decode( $encrypted_password ), 'AES-256-CBC', $key, 0, $iv );
+}
+
+/**
  * Main plugin class
  */
 final class WP_Nalda_Sync {

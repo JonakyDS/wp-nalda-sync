@@ -65,7 +65,7 @@ class WPNS_SFTP_Uploader {
             'host'     => $settings['sftp_host'] ?? '',
             'port'     => absint( $settings['sftp_port'] ?? 22 ),
             'username' => $settings['sftp_username'] ?? '',
-            'password' => WPNS_Admin::decrypt_password( $settings['sftp_password'] ?? '' ),
+            'password' => wpns_decrypt_password( $settings['sftp_password'] ?? '' ),
             'path'     => $settings['sftp_path'] ?? '/',
         );
     }

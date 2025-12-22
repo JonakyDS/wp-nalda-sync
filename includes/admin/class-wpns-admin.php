@@ -366,14 +366,8 @@ class WPNS_Admin {
      * @return string
      */
     public static function decrypt_password( $encrypted_password ) {
-        if ( empty( $encrypted_password ) ) {
-            return '';
-        }
-
-        $key = wp_salt( 'auth' );
-        $iv  = substr( hash( 'sha256', wp_salt( 'secure_auth' ) ), 0, 16 );
-
-        return openssl_decrypt( base64_decode( $encrypted_password ), 'AES-256-CBC', $key, 0, $iv );
+        // Use global helper function
+        return wpns_decrypt_password( $encrypted_password );
     }
 
     /**
