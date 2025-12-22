@@ -205,11 +205,15 @@ class WPNS_CSV_Generator {
 
         fclose( $handle );
 
-        // Log skipped products
+        // Log skipped products (limit to first 20 to avoid performance issues)
         if ( $this->skipped_count > 0 ) {
+            $sample_skipped = array_slice( $this->skipped_products, 0, 20 );
             $this->logger->warning(
                 sprintf( __( 'Skipped %d products due to missing GTIN or price', 'wp-nalda-sync' ), $this->skipped_count ),
-                array( 'skipped_products' => $this->skipped_products )
+                array( 
+                    'skipped_sample' => $sample_skipped,
+                    'showing' => min( 20, count( $this->skipped_products ) ) . ' of ' . $this->skipped_count,
+                )
             );
         }
 
