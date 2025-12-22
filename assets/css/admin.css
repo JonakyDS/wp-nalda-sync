@@ -816,6 +816,10 @@
     border-left: 4px solid #2271b1;
 }
 
+.wpns-sync-run.orphan {
+    border-left: 4px solid #9ca0a5;
+}
+
 .wpns-run-header {
     display: flex;
     align-items: center;
@@ -855,6 +859,11 @@
 .wpns-status-icon.running {
     background: linear-gradient(135deg, #f0f6fc 0%, #d0e4f6 100%);
     color: #2271b1;
+}
+
+.wpns-status-icon.orphan {
+    background: linear-gradient(135deg, #f5f5f5 0%, #e5e5e5 100%);
+    color: #646970;
 }
 
 .wpns-status-icon .dashicons {

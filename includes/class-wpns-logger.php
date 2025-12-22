@@ -211,10 +211,10 @@ class WPNS_Logger {
             return array();
         }
 
-        // Get distinct run_ids with their first and last timestamps
+        // Get distinct run_ids with their first and last timestamps (including orphan logs as a special "run")
         $query = $wpdb->prepare(
             "SELECT 
-                run_id,
+                CASE WHEN run_id = '' THEN '__orphan__' ELSE run_id END as run_id,
                 MIN(timestamp) as started_at,
                 MAX(timestamp) as ended_at,
                 COUNT(*) as log_count,
@@ -223,9 +223,8 @@ class WPNS_Logger {
                 SUM(CASE WHEN level = 'success' THEN 1 ELSE 0 END) as success_count,
                 SUM(CASE WHEN level = 'info' THEN 1 ELSE 0 END) as info_count
             FROM {$this->table_name}
-            WHERE run_id != ''
-            GROUP BY run_id
-            ORDER BY started_at DESC
+            GROUP BY CASE WHEN run_id = '' THEN '__orphan__' ELSE run_id END
+            ORDER BY ended_at DESC
             LIMIT %d",
             $limit
         );
@@ -234,8 +233,13 @@ class WPNS_Logger {
 
         // Enhance each run with additional data
         foreach ( $runs as &$run ) {
+            // Handle orphan logs specially
+            $is_orphan = ( $run->run_id === '__orphan__' );
+            
             // Determine overall status
-            if ( $run->error_count > 0 ) {
+            if ( $is_orphan ) {
+                $run->status = 'orphan';
+            } elseif ( $run->error_count > 0 ) {
                 $run->status = 'failed';
             } elseif ( $run->success_count > 0 ) {
                 $run->status = 'success';
@@ -249,28 +253,36 @@ class WPNS_Logger {
             $run->duration = $end - $start;
 
             // Get the trigger type from the first log entry
-            $first_log = $wpdb->get_row( $wpdb->prepare(
-                "SELECT context FROM {$this->table_name} WHERE run_id = %s ORDER BY timestamp ASC LIMIT 1",
-                $run->run_id
-            ) );
-
-            if ( $first_log && ! empty( $first_log->context ) ) {
-                $context = json_decode( $first_log->context, true );
-                $run->trigger = isset( $context['trigger'] ) ? $context['trigger'] : 'unknown';
+            if ( $is_orphan ) {
+                $run->trigger = 'system';
             } else {
-                $run->trigger = 'unknown';
+                $first_log = $wpdb->get_row( $wpdb->prepare(
+                    "SELECT context FROM {$this->table_name} WHERE run_id = %s ORDER BY timestamp ASC LIMIT 1",
+                    $run->run_id
+                ) );
+
+                if ( $first_log && ! empty( $first_log->context ) ) {
+                    $context = json_decode( $first_log->context, true );
+                    $run->trigger = isset( $context['trigger'] ) ? $context['trigger'] : 'unknown';
+                } else {
+                    $run->trigger = 'unknown';
+                }
             }
 
             // Get final stats from the last success log
-            $last_success = $wpdb->get_row( $wpdb->prepare(
-                "SELECT context FROM {$this->table_name} WHERE run_id = %s AND level = 'success' ORDER BY timestamp DESC LIMIT 1",
-                $run->run_id
-            ) );
-
-            if ( $last_success && ! empty( $last_success->context ) ) {
-                $run->final_stats = json_decode( $last_success->context, true );
-            } else {
+            if ( $is_orphan ) {
                 $run->final_stats = null;
+            } else {
+                $last_success = $wpdb->get_row( $wpdb->prepare(
+                    "SELECT context FROM {$this->table_name} WHERE run_id = %s AND level = 'success' ORDER BY timestamp DESC LIMIT 1",
+                    $run->run_id
+                ) );
+
+                if ( $last_success && ! empty( $last_success->context ) ) {
+                    $run->final_stats = json_decode( $last_success->context, true );
+                } else {
+                    $run->final_stats = null;
+                }
             }
         }
 
@@ -288,6 +300,13 @@ class WPNS_Logger {
 
         if ( ! $this->table_exists() ) {
             return array();
+        }
+
+        // Handle orphan logs (those without a run_id)
+        if ( $run_id === '__orphan__' ) {
+            return $wpdb->get_results(
+                "SELECT * FROM {$this->table_name} WHERE run_id = '' ORDER BY timestamp DESC"
+            );
         }
 
         return $wpdb->get_results( $wpdb->prepare(

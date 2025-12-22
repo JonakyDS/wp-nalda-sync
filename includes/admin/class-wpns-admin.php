@@ -601,8 +601,21 @@ class WPNS_Admin {
                     <?php foreach ( $sync_runs as $run ) : 
                         $run_logs = $this->logger->get_logs_for_run( $run->run_id );
                         $status_class = $run->status;
-                        $trigger_label = 'manual' === $run->trigger ? __( 'Manual', 'wp-nalda-sync' ) : __( 'Scheduled', 'wp-nalda-sync' );
-                        $trigger_icon = 'manual' === $run->trigger ? 'admin-users' : 'clock';
+                        $is_orphan = ( $run->run_id === '__orphan__' );
+                        
+                        if ( $is_orphan ) {
+                            $trigger_label = __( 'System', 'wp-nalda-sync' );
+                            $trigger_icon = 'info-outline';
+                        } elseif ( 'manual' === $run->trigger ) {
+                            $trigger_label = __( 'Manual', 'wp-nalda-sync' );
+                            $trigger_icon = 'admin-users';
+                        } elseif ( 'scheduled' === $run->trigger ) {
+                            $trigger_label = __( 'Scheduled', 'wp-nalda-sync' );
+                            $trigger_icon = 'clock';
+                        } else {
+                            $trigger_label = __( 'Unknown', 'wp-nalda-sync' );
+                            $trigger_icon = 'editor-help';
+                        }
                     ?>
                         <div class="wpns-sync-run <?php echo esc_attr( $status_class ); ?>" data-run-id="<?php echo esc_attr( $run->run_id ); ?>">
                             <div class="wpns-run-header">
@@ -612,6 +625,8 @@ class WPNS_Admin {
                                             <span class="dashicons dashicons-yes-alt"></span>
                                         <?php elseif ( 'failed' === $status_class ) : ?>
                                             <span class="dashicons dashicons-dismiss"></span>
+                                        <?php elseif ( 'orphan' === $status_class ) : ?>
+                                            <span class="dashicons dashicons-info-outline"></span>
                                         <?php else : ?>
                                             <span class="dashicons dashicons-update"></span>
                                         <?php endif; ?>
@@ -625,6 +640,8 @@ class WPNS_Admin {
                                                 esc_html_e( 'Sync Completed Successfully', 'wp-nalda-sync' );
                                             } elseif ( 'failed' === $status_class ) {
                                                 esc_html_e( 'Sync Failed', 'wp-nalda-sync' );
+                                            } elseif ( 'orphan' === $status_class ) {
+                                                esc_html_e( 'System Logs (Not Associated with a Run)', 'wp-nalda-sync' );
                                             } else {
                                                 esc_html_e( 'Sync In Progress', 'wp-nalda-sync' );
                                             }
@@ -638,10 +655,15 @@ class WPNS_Admin {
                                         </span>
                                         <span class="wpns-run-time">
                                             <span class="dashicons dashicons-calendar-alt"></span>
-                                            <?php echo esc_html( wp_date( 'M j, Y', strtotime( $run->started_at ) ) ); ?>
+                                            <?php 
+                                            // For orphan logs, show the latest log time; for runs, show the start time
+                                            $display_time = $is_orphan ? $run->ended_at : $run->started_at;
+                                            ?>
+                                            <?php echo esc_html( wp_date( 'M j, Y', strtotime( $display_time ) ) ); ?>
                                             <?php esc_html_e( 'at', 'wp-nalda-sync' ); ?>
-                                            <?php echo esc_html( wp_date( 'H:i:s', strtotime( $run->started_at ) ) ); ?>
+                                            <?php echo esc_html( wp_date( 'H:i:s', strtotime( $display_time ) ) ); ?>
                                         </span>
+                                        <?php if ( ! $is_orphan ) : ?>
                                         <span class="wpns-run-duration">
                                             <span class="dashicons dashicons-backup"></span>
                                             <?php 
@@ -652,6 +674,7 @@ class WPNS_Admin {
                                             }
                                             ?>
                                         </span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                                 <div class="wpns-run-summary">
