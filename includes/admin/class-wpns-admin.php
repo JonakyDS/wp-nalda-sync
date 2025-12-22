@@ -316,15 +316,24 @@ class WPNS_Admin {
 
         $sanitized['sftp_path']        = sanitize_text_field( $input['sftp_path'] ?? '/' );
         $sanitized['schedule']         = sanitize_key( $input['schedule'] ?? 'daily' );
+        
+        // Handle custom interval minutes (1-43200 minutes = 1 min to 30 days)
+        $custom_minutes = absint( $input['custom_interval_minutes'] ?? 60 );
+        $sanitized['custom_interval_minutes'] = max( 1, min( 43200, $custom_minutes ) );
+        
         $sanitized['filename_pattern'] = sanitize_file_name( $input['filename_pattern'] ?? 'products_{date}.csv' );
         $sanitized['batch_size']       = absint( $input['batch_size'] ?? 100 );
         $sanitized['delivery_time']    = absint( $input['delivery_time'] ?? 3 );
         $sanitized['return_days']      = absint( $input['return_days'] ?? 14 );
         $sanitized['enabled']          = ! empty( $input['enabled'] );
 
-        // Update cron schedule if changed
-        if ( $sanitized['enabled'] !== ( $old_settings['enabled'] ?? false ) ||
-             $sanitized['schedule'] !== ( $old_settings['schedule'] ?? 'daily' ) ) {
+        // Update cron schedule if changed (also check custom interval)
+        $schedule_changed = $sanitized['enabled'] !== ( $old_settings['enabled'] ?? false ) ||
+                           $sanitized['schedule'] !== ( $old_settings['schedule'] ?? 'daily' ) ||
+                           ( $sanitized['schedule'] === 'wpns_custom' && 
+                             $sanitized['custom_interval_minutes'] !== ( $old_settings['custom_interval_minutes'] ?? 60 ) );
+
+        if ( $schedule_changed ) {
             $this->cron->reschedule( $sanitized['enabled'], $sanitized['schedule'] );
         }
 
@@ -874,11 +883,13 @@ class WPNS_Admin {
     public function render_schedule_field() {
         $settings = get_option( 'wpns_settings', array() );
         $schedule = $settings['schedule'] ?? 'daily';
+        $custom_minutes = $settings['custom_interval_minutes'] ?? 60;
         $schedules = array(
-            'hourly'     => __( 'Hourly', 'wp-nalda-sync' ),
-            'twicedaily' => __( 'Twice Daily', 'wp-nalda-sync' ),
-            'daily'      => __( 'Daily', 'wp-nalda-sync' ),
-            'weekly'     => __( 'Weekly', 'wp-nalda-sync' ),
+            'hourly'      => __( 'Hourly', 'wp-nalda-sync' ),
+            'twicedaily'  => __( 'Twice Daily (12 hours)', 'wp-nalda-sync' ),
+            'daily'       => __( 'Daily (24 hours)', 'wp-nalda-sync' ),
+            'weekly'      => __( 'Weekly', 'wp-nalda-sync' ),
+            'wpns_custom' => __( 'Custom Interval', 'wp-nalda-sync' ),
         );
         ?>
         <select id="wpns_schedule" name="wpns_settings[schedule]" class="regular-text">
@@ -888,7 +899,37 @@ class WPNS_Admin {
                 </option>
             <?php endforeach; ?>
         </select>
+        
+        <div id="wpns_custom_interval_wrapper" style="margin-top: 10px; <?php echo $schedule !== 'wpns_custom' ? 'display:none;' : ''; ?>">
+            <label for="wpns_custom_interval_minutes">
+                <?php esc_html_e( 'Run every', 'wp-nalda-sync' ); ?>
+                <input type="number" 
+                       id="wpns_custom_interval_minutes" 
+                       name="wpns_settings[custom_interval_minutes]" 
+                       value="<?php echo esc_attr( $custom_minutes ); ?>" 
+                       min="1" 
+                       max="43200" 
+                       style="width: 80px;" />
+                <?php esc_html_e( 'minutes', 'wp-nalda-sync' ); ?>
+            </label>
+            <p class="description" style="margin-top: 5px;">
+                <?php esc_html_e( 'Examples: 30 = every 30 min, 60 = hourly, 1440 = daily', 'wp-nalda-sync' ); ?>
+            </p>
+        </div>
+        
         <p class="description"><?php esc_html_e( 'How often should the sync run automatically.', 'wp-nalda-sync' ); ?></p>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            $('#wpns_schedule').on('change', function() {
+                if ($(this).val() === 'wpns_custom') {
+                    $('#wpns_custom_interval_wrapper').show();
+                } else {
+                    $('#wpns_custom_interval_wrapper').hide();
+                }
+            });
+        });
+        </script>
         <?php
     }
 

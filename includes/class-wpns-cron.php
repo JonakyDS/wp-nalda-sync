@@ -86,6 +86,17 @@ class WPNS_Cron {
             );
         }
 
+        // Add custom interval schedule
+        $settings = get_option( 'wpns_settings', array() );
+        $custom_minutes = isset( $settings['custom_interval_minutes'] ) ? absint( $settings['custom_interval_minutes'] ) : 0;
+        
+        if ( $custom_minutes > 0 ) {
+            $schedules['wpns_custom'] = array(
+                'interval' => $custom_minutes * MINUTE_IN_SECONDS,
+                'display'  => sprintf( __( 'Every %d minutes', 'wp-nalda-sync' ), $custom_minutes ),
+            );
+        }
+
         return $schedules;
     }
 
