@@ -30,11 +30,81 @@ class WPNS_Logger {
     private $table_name;
 
     /**
+     * Current run ID
+     *
+     * @var string
+     */
+    private $current_run_id = '';
+
+    /**
      * Constructor
      */
     public function __construct() {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'wpns_logs';
+    }
+
+    /**
+     * Start a new sync run
+     *
+     * @param string $trigger How the sync was triggered (scheduled, manual).
+     * @return string The run ID
+     */
+    public function start_run( $trigger = 'manual' ) {
+        $this->current_run_id = $this->generate_run_id();
+        
+        $this->info(
+            sprintf( __( 'Starting %s sync', 'wp-nalda-sync' ), $trigger ),
+            array( 'trigger' => $trigger )
+        );
+
+        return $this->current_run_id;
+    }
+
+    /**
+     * End the current sync run
+     *
+     * @param string $status Run status (success, failed).
+     * @param array  $stats  Run statistics.
+     */
+    public function end_run( $status = 'success', $stats = array() ) {
+        if ( 'success' === $status ) {
+            $this->success( __( 'Sync completed successfully', 'wp-nalda-sync' ), $stats );
+        } else {
+            $this->error( __( 'Sync failed', 'wp-nalda-sync' ), $stats );
+        }
+        $this->current_run_id = '';
+    }
+
+    /**
+     * Generate a unique run ID
+     *
+     * @return string
+     */
+    private function generate_run_id() {
+        return sprintf(
+            '%s-%s',
+            date( 'Ymd-His' ),
+            substr( md5( uniqid( '', true ) ), 0, 8 )
+        );
+    }
+
+    /**
+     * Set current run ID (for resuming)
+     *
+     * @param string $run_id Run ID.
+     */
+    public function set_run_id( $run_id ) {
+        $this->current_run_id = $run_id;
+    }
+
+    /**
+     * Get current run ID
+     *
+     * @return string
+     */
+    public function get_run_id() {
+        return $this->current_run_id;
     }
 
     /**
@@ -99,18 +169,20 @@ class WPNS_Logger {
         $wpdb->insert(
             $this->table_name,
             array(
+                'run_id'    => $this->current_run_id,
                 'timestamp' => current_time( 'mysql' ),
                 'level'     => $level,
                 'message'   => $message,
                 'context'   => $context_json,
             ),
-            array( '%s', '%s', '%s', '%s' )
+            array( '%s', '%s', '%s', '%s', '%s' )
         );
 
         // Also write to WordPress debug log if enabled
         if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
             $log_message = sprintf(
-                '[WP Nalda Sync] [%s] %s',
+                '[WP Nalda Sync] [%s] [%s] %s',
+                $this->current_run_id ?: 'no-run',
                 strtoupper( $level ),
                 $message
             );
@@ -127,7 +199,105 @@ class WPNS_Logger {
     }
 
     /**
-     * Get logs from database
+     * Get all sync runs with their summaries
+     *
+     * @param int $limit Number of runs to retrieve.
+     * @return array
+     */
+    public function get_sync_runs( $limit = 20 ) {
+        global $wpdb;
+
+        if ( ! $this->table_exists() ) {
+            return array();
+        }
+
+        // Get distinct run_ids with their first and last timestamps
+        $query = $wpdb->prepare(
+            "SELECT 
+                run_id,
+                MIN(timestamp) as started_at,
+                MAX(timestamp) as ended_at,
+                COUNT(*) as log_count,
+                SUM(CASE WHEN level = 'error' THEN 1 ELSE 0 END) as error_count,
+                SUM(CASE WHEN level = 'warning' THEN 1 ELSE 0 END) as warning_count,
+                SUM(CASE WHEN level = 'success' THEN 1 ELSE 0 END) as success_count,
+                SUM(CASE WHEN level = 'info' THEN 1 ELSE 0 END) as info_count
+            FROM {$this->table_name}
+            WHERE run_id != ''
+            GROUP BY run_id
+            ORDER BY started_at DESC
+            LIMIT %d",
+            $limit
+        );
+
+        $runs = $wpdb->get_results( $query );
+
+        // Enhance each run with additional data
+        foreach ( $runs as &$run ) {
+            // Determine overall status
+            if ( $run->error_count > 0 ) {
+                $run->status = 'failed';
+            } elseif ( $run->success_count > 0 ) {
+                $run->status = 'success';
+            } else {
+                $run->status = 'running';
+            }
+
+            // Calculate duration
+            $start = strtotime( $run->started_at );
+            $end   = strtotime( $run->ended_at );
+            $run->duration = $end - $start;
+
+            // Get the trigger type from the first log entry
+            $first_log = $wpdb->get_row( $wpdb->prepare(
+                "SELECT context FROM {$this->table_name} WHERE run_id = %s ORDER BY timestamp ASC LIMIT 1",
+                $run->run_id
+            ) );
+
+            if ( $first_log && ! empty( $first_log->context ) ) {
+                $context = json_decode( $first_log->context, true );
+                $run->trigger = isset( $context['trigger'] ) ? $context['trigger'] : 'unknown';
+            } else {
+                $run->trigger = 'unknown';
+            }
+
+            // Get final stats from the last success log
+            $last_success = $wpdb->get_row( $wpdb->prepare(
+                "SELECT context FROM {$this->table_name} WHERE run_id = %s AND level = 'success' ORDER BY timestamp DESC LIMIT 1",
+                $run->run_id
+            ) );
+
+            if ( $last_success && ! empty( $last_success->context ) ) {
+                $run->final_stats = json_decode( $last_success->context, true );
+            } else {
+                $run->final_stats = null;
+            }
+        }
+
+        return $runs;
+    }
+
+    /**
+     * Get logs for a specific run
+     *
+     * @param string $run_id Run ID.
+     * @return array
+     */
+    public function get_logs_for_run( $run_id ) {
+        global $wpdb;
+
+        if ( ! $this->table_exists() ) {
+            return array();
+        }
+
+        return $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM {$this->table_name} WHERE run_id = %s ORDER BY timestamp ASC",
+            $run_id
+        ) );
+    }
+
+    /**
+     * Get logs from database (legacy method)
      *
      * @param int    $limit Number of logs to retrieve.
      * @param string $level Filter by log level (optional).
@@ -185,37 +355,12 @@ class WPNS_Logger {
             $counts['total']      += (int) $row->count;
         }
 
-        return $counts;
-    }
-
-    /**
-     * Get logs for a specific date range
-     *
-     * @param string $start_date Start date (Y-m-d format).
-     * @param string $end_date   End date (Y-m-d format).
-     * @param string $level      Filter by log level (optional).
-     * @return array
-     */
-    public function get_logs_by_date_range( $start_date, $end_date, $level = '' ) {
-        global $wpdb;
-
-        if ( ! $this->table_exists() ) {
-            return array();
-        }
-
-        $where = array(
-            $wpdb->prepare( 'DATE(timestamp) >= %s', $start_date ),
-            $wpdb->prepare( 'DATE(timestamp) <= %s', $end_date ),
+        // Count runs
+        $counts['runs'] = (int) $wpdb->get_var(
+            "SELECT COUNT(DISTINCT run_id) FROM {$this->table_name} WHERE run_id != ''"
         );
 
-        if ( ! empty( $level ) ) {
-            $where[] = $wpdb->prepare( 'level = %s', $level );
-        }
-
-        $query = "SELECT * FROM {$this->table_name} WHERE " . implode( ' AND ', $where );
-        $query .= ' ORDER BY timestamp DESC';
-
-        return $wpdb->get_results( $query );
+        return $counts;
     }
 
     /**
@@ -229,8 +374,6 @@ class WPNS_Logger {
         }
 
         $wpdb->query( "TRUNCATE TABLE {$this->table_name}" );
-
-        $this->info( __( 'Logs cleared', 'wp-nalda-sync' ) );
     }
 
     /**
@@ -247,18 +390,12 @@ class WPNS_Logger {
 
         $cutoff_date = date( 'Y-m-d H:i:s', strtotime( "-{$days} days" ) );
 
-        $deleted = $wpdb->query(
+        $wpdb->query(
             $wpdb->prepare(
                 "DELETE FROM {$this->table_name} WHERE timestamp < %s",
                 $cutoff_date
             )
         );
-
-        if ( $deleted > 0 ) {
-            $this->info(
-                sprintf( __( 'Deleted %d old log entries', 'wp-nalda-sync' ), $deleted )
-            );
-        }
     }
 
     /**
@@ -292,92 +429,7 @@ class WPNS_Logger {
     }
 
     /**
-     * Export logs to CSV
-     *
-     * @param string $start_date Start date (optional).
-     * @param string $end_date   End date (optional).
-     * @return string|false File path or false on failure.
-     */
-    public function export_logs_to_csv( $start_date = null, $end_date = null ) {
-        if ( $start_date && $end_date ) {
-            $logs = $this->get_logs_by_date_range( $start_date, $end_date );
-        } else {
-            $logs = $this->get_logs( 10000 );
-        }
-
-        if ( empty( $logs ) ) {
-            return false;
-        }
-
-        $filename = 'wpns-logs-' . date( 'Y-m-d-H-i-s' ) . '.csv';
-        $filepath = WP_Nalda_Sync::get_logs_dir() . '/' . $filename;
-
-        $handle = fopen( $filepath, 'w' );
-        if ( ! $handle ) {
-            return false;
-        }
-
-        // Add UTF-8 BOM
-        fwrite( $handle, "\xEF\xBB\xBF" );
-
-        // Write headers
-        fputcsv( $handle, array( 'Timestamp', 'Level', 'Message', 'Context' ) );
-
-        // Write log entries
-        foreach ( $logs as $log ) {
-            fputcsv( $handle, array(
-                $log->timestamp,
-                $log->level,
-                $log->message,
-                $log->context,
-            ) );
-        }
-
-        fclose( $handle );
-
-        return $filepath;
-    }
-
-    /**
-     * Get sync history summary
-     *
-     * @param int $limit Number of sync runs to retrieve.
-     * @return array
-     */
-    public function get_sync_history( $limit = 10 ) {
-        global $wpdb;
-
-        if ( ! $this->table_exists() ) {
-            return array();
-        }
-
-        // Get sync start entries
-        $query = $wpdb->prepare(
-            "SELECT * FROM {$this->table_name} 
-             WHERE message LIKE %s 
-             ORDER BY timestamp DESC 
-             LIMIT %d",
-            '%Starting scheduled sync%',
-            $limit
-        );
-
-        return $wpdb->get_results( $query );
-    }
-
-    /**
-     * Log sync start
-     *
-     * @param string $trigger How the sync was triggered (scheduled, manual).
-     */
-    public function log_sync_start( $trigger = 'scheduled' ) {
-        $this->info(
-            sprintf( __( 'Starting %s sync', 'wp-nalda-sync' ), $trigger ),
-            array( 'trigger' => $trigger )
-        );
-    }
-
-    /**
-     * Log sync complete
+     * Log sync complete (convenience method)
      *
      * @param array $stats Sync statistics.
      */
@@ -389,9 +441,9 @@ class WPNS_Logger {
     }
 
     /**
-     * Log sync failure
+     * Log sync failure (convenience method)
      *
-     * @param string $reason Failure reason.
+     * @param string $reason  Failure reason.
      * @param array  $context Additional context.
      */
     public function log_sync_failure( $reason, $context = array() ) {

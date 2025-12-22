@@ -56,6 +56,13 @@
                     WPNSAdmin.closeModal();
                 }
             });
+
+            // Toggle sync run details
+            $(document).on('click', '.wpns-run-header', this.toggleRunDetails.bind(this));
+            $(document).on('click', '.wpns-run-toggle', function (e) {
+                e.stopPropagation();
+                WPNSAdmin.toggleRunDetails.call(WPNSAdmin, e);
+            });
         },
 
         /**
@@ -282,10 +289,8 @@
                 },
                 success: function (response) {
                     if (response.success) {
-                        $('#wpns-logs-body').html(
-                            '<tr class="no-items"><td colspan="4">No logs found.</td></tr>'
-                        );
-                        alert(wpns_admin.strings.cleared);
+                        // Reload the page to show empty state
+                        location.reload();
                     } else {
                         alert(wpns_admin.strings.error + ' ' + response.data);
                     }
@@ -309,29 +314,12 @@
 
             const $button = $('#wpns-refresh-logs');
             const $icon = $button.find('.dashicons');
-            const level = $('#wpns-log-filter').val();
 
             $button.prop('disabled', true);
             $icon.addClass('wpns-spinning');
 
-            $.ajax({
-                url: wpns_admin.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'wpns_get_logs',
-                    nonce: wpns_admin.nonce,
-                    level: level
-                },
-                success: function (response) {
-                    if (response.success) {
-                        $('#wpns-logs-body').html(response.data);
-                    }
-                },
-                complete: function () {
-                    $button.prop('disabled', false);
-                    $icon.removeClass('wpns-spinning');
-                }
-            });
+            // Simply reload the page to refresh the grouped logs view
+            location.reload();
         },
 
         /**
@@ -387,6 +375,30 @@
                 e.preventDefault();
             }
             $('#wpns-context-modal').hide();
+        },
+
+        /**
+         * Toggle sync run details
+         *
+         * @param {Event} e Click event
+         */
+        toggleRunDetails: function (e) {
+            e.preventDefault();
+
+            const $header = $(e.target).closest('.wpns-run-header');
+            const $run = $header.closest('.wpns-sync-run');
+            const $details = $run.find('.wpns-run-details');
+            const $toggle = $run.find('.wpns-run-toggle');
+
+            const isExpanded = $toggle.attr('aria-expanded') === 'true';
+
+            if (isExpanded) {
+                $details.slideUp(200);
+                $toggle.attr('aria-expanded', 'false');
+            } else {
+                $details.slideDown(200);
+                $toggle.attr('aria-expanded', 'true');
+            }
         }
     };
 

@@ -542,7 +542,7 @@ class WPNS_Admin {
             return;
         }
 
-        $logs       = $this->logger->get_logs( 100 );
+        $sync_runs  = $this->logger->get_sync_runs( 20 );
         $log_counts = $this->logger->get_log_counts();
         ?>
         <div class="wrap wpns-admin-wrap">
@@ -553,33 +553,28 @@ class WPNS_Admin {
 
             <div class="wpns-logs-header">
                 <div class="wpns-logs-filters">
-                    <label for="wpns-log-filter"><?php esc_html_e( 'Filter:', 'wp-nalda-sync' ); ?></label>
-                    <select id="wpns-log-filter" class="wpns-log-filter">
-                        <option value=""><?php esc_html_e( 'All Levels', 'wp-nalda-sync' ); ?></option>
-                        <option value="info"><?php esc_html_e( 'Info', 'wp-nalda-sync' ); ?></option>
-                        <option value="success"><?php esc_html_e( 'Success', 'wp-nalda-sync' ); ?></option>
-                        <option value="warning"><?php esc_html_e( 'Warning', 'wp-nalda-sync' ); ?></option>
-                        <option value="error"><?php esc_html_e( 'Error', 'wp-nalda-sync' ); ?></option>
-                    </select>
+                    <div class="wpns-logs-stats">
+                        <span class="wpns-logs-stat runs">
+                            <span class="count"><?php echo esc_html( $log_counts['runs'] ?? 0 ); ?></span> 
+                            <?php esc_html_e( 'Runs', 'wp-nalda-sync' ); ?>
+                        </span>
+                        <span class="wpns-logs-stat success">
+                            <span class="count"><?php echo esc_html( $log_counts['success'] ?? 0 ); ?></span> 
+                            <?php esc_html_e( 'Success', 'wp-nalda-sync' ); ?>
+                        </span>
+                        <span class="wpns-logs-stat warning">
+                            <span class="count"><?php echo esc_html( $log_counts['warning'] ?? 0 ); ?></span> 
+                            <?php esc_html_e( 'Warnings', 'wp-nalda-sync' ); ?>
+                        </span>
+                        <span class="wpns-logs-stat error">
+                            <span class="count"><?php echo esc_html( $log_counts['error'] ?? 0 ); ?></span> 
+                            <?php esc_html_e( 'Errors', 'wp-nalda-sync' ); ?>
+                        </span>
+                    </div>
                     <button type="button" id="wpns-refresh-logs" class="button">
                         <span class="dashicons dashicons-update"></span>
                         <?php esc_html_e( 'Refresh', 'wp-nalda-sync' ); ?>
                     </button>
-                    
-                    <div class="wpns-logs-stats">
-                        <span class="wpns-logs-stat info">
-                            <span class="count"><?php echo esc_html( $log_counts['info'] ?? 0 ); ?></span> Info
-                        </span>
-                        <span class="wpns-logs-stat success">
-                            <span class="count"><?php echo esc_html( $log_counts['success'] ?? 0 ); ?></span> Success
-                        </span>
-                        <span class="wpns-logs-stat warning">
-                            <span class="count"><?php echo esc_html( $log_counts['warning'] ?? 0 ); ?></span> Warning
-                        </span>
-                        <span class="wpns-logs-stat error">
-                            <span class="count"><?php echo esc_html( $log_counts['error'] ?? 0 ); ?></span> Error
-                        </span>
-                    </div>
                 </div>
                 <button type="button" id="wpns-clear-logs" class="button button-secondary">
                     <span class="dashicons dashicons-trash"></span>
@@ -587,64 +582,142 @@ class WPNS_Admin {
                 </button>
             </div>
 
-            <div class="wpns-logs-container">
-                <table class="wpns-logs-table">
-                    <thead>
-                        <tr>
-                            <th class="column-time"><?php esc_html_e( 'Timestamp', 'wp-nalda-sync' ); ?></th>
-                            <th class="column-level"><?php esc_html_e( 'Level', 'wp-nalda-sync' ); ?></th>
-                            <th class="column-message"><?php esc_html_e( 'Message', 'wp-nalda-sync' ); ?></th>
-                            <th class="column-context"><?php esc_html_e( 'Details', 'wp-nalda-sync' ); ?></th>
-                        </tr>
-                    </thead>
-                    <tbody id="wpns-logs-body">
-                        <?php if ( empty( $logs ) ) : ?>
-                            <tr class="no-items">
-                                <td colspan="4"><?php esc_html_e( 'No logs found. Run a sync to see activity here.', 'wp-nalda-sync' ); ?></td>
-                            </tr>
-                        <?php else : ?>
-                            <?php foreach ( $logs as $log ) : 
-                                $timestamp = strtotime( $log->timestamp );
-                            ?>
-                                <tr class="wpns-log-row" data-level="<?php echo esc_attr( $log->level ); ?>">
-                                    <td class="column-time">
-                                        <span class="log-date"><?php echo esc_html( wp_date( 'M j, Y', $timestamp ) ); ?></span>
-                                        <span class="log-time"><?php echo esc_html( wp_date( 'H:i:s', $timestamp ) ); ?></span>
-                                    </td>
-                                    <td class="column-level">
-                                        <span class="wpns-badge <?php echo esc_attr( $log->level ); ?>">
-                                            <?php echo esc_html( ucfirst( $log->level ) ); ?>
-                                        </span>
-                                    </td>
-                                    <td class="column-message"><?php echo esc_html( $log->message ); ?></td>
-                                    <td class="column-context">
-                                        <?php if ( ! empty( $log->context ) ) : ?>
-                                            <button type="button" class="button button-small wpns-view-context" 
-                                                    data-context="<?php echo esc_attr( $log->context ); ?>">
-                                                <span class="dashicons dashicons-visibility"></span>
-                                                <?php esc_html_e( 'View', 'wp-nalda-sync' ); ?>
-                                            </button>
+            <div class="wpns-sync-runs-container">
+                <?php if ( empty( $sync_runs ) ) : ?>
+                    <div class="wpns-no-logs">
+                        <span class="dashicons dashicons-info-outline"></span>
+                        <p><?php esc_html_e( 'No sync runs found. Run a sync to see activity here.', 'wp-nalda-sync' ); ?></p>
+                    </div>
+                <?php else : ?>
+                    <?php foreach ( $sync_runs as $run ) : 
+                        $run_logs = $this->logger->get_logs_for_run( $run->run_id );
+                        $status_class = $run->status;
+                        $trigger_label = 'manual' === $run->trigger ? __( 'Manual', 'wp-nalda-sync' ) : __( 'Scheduled', 'wp-nalda-sync' );
+                        $trigger_icon = 'manual' === $run->trigger ? 'admin-users' : 'clock';
+                    ?>
+                        <div class="wpns-sync-run <?php echo esc_attr( $status_class ); ?>" data-run-id="<?php echo esc_attr( $run->run_id ); ?>">
+                            <div class="wpns-run-header">
+                                <div class="wpns-run-status">
+                                    <span class="wpns-status-icon <?php echo esc_attr( $status_class ); ?>">
+                                        <?php if ( 'success' === $status_class ) : ?>
+                                            <span class="dashicons dashicons-yes-alt"></span>
+                                        <?php elseif ( 'failed' === $status_class ) : ?>
+                                            <span class="dashicons dashicons-dismiss"></span>
                                         <?php else : ?>
-                                            <span class="wpns-text-muted">—</span>
+                                            <span class="dashicons dashicons-update"></span>
                                         <?php endif; ?>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-                <?php if ( ! empty( $logs ) ) : ?>
-                <div class="wpns-logs-footer">
-                    <span class="wpns-logs-count">
-                        <?php 
-                        printf( 
-                            esc_html__( 'Showing %d of %d total logs', 'wp-nalda-sync' ), 
-                            count( $logs ), 
-                            $log_counts['total'] ?? count( $logs ) 
-                        ); 
-                        ?>
-                    </span>
-                </div>
+                                    </span>
+                                </div>
+                                <div class="wpns-run-info">
+                                    <div class="wpns-run-title">
+                                        <strong>
+                                            <?php 
+                                            if ( 'success' === $status_class ) {
+                                                esc_html_e( 'Sync Completed Successfully', 'wp-nalda-sync' );
+                                            } elseif ( 'failed' === $status_class ) {
+                                                esc_html_e( 'Sync Failed', 'wp-nalda-sync' );
+                                            } else {
+                                                esc_html_e( 'Sync In Progress', 'wp-nalda-sync' );
+                                            }
+                                            ?>
+                                        </strong>
+                                    </div>
+                                    <div class="wpns-run-meta">
+                                        <span class="wpns-run-trigger">
+                                            <span class="dashicons dashicons-<?php echo esc_attr( $trigger_icon ); ?>"></span>
+                                            <?php echo esc_html( $trigger_label ); ?>
+                                        </span>
+                                        <span class="wpns-run-time">
+                                            <span class="dashicons dashicons-calendar-alt"></span>
+                                            <?php echo esc_html( wp_date( 'M j, Y', strtotime( $run->started_at ) ) ); ?>
+                                            <?php esc_html_e( 'at', 'wp-nalda-sync' ); ?>
+                                            <?php echo esc_html( wp_date( 'H:i:s', strtotime( $run->started_at ) ) ); ?>
+                                        </span>
+                                        <span class="wpns-run-duration">
+                                            <span class="dashicons dashicons-backup"></span>
+                                            <?php 
+                                            if ( $run->duration < 60 ) {
+                                                printf( esc_html__( '%d sec', 'wp-nalda-sync' ), $run->duration );
+                                            } else {
+                                                printf( esc_html__( '%d min %d sec', 'wp-nalda-sync' ), floor( $run->duration / 60 ), $run->duration % 60 );
+                                            }
+                                            ?>
+                                        </span>
+                                    </div>
+                                </div>
+                                <div class="wpns-run-summary">
+                                    <?php if ( $run->final_stats ) : ?>
+                                        <div class="wpns-run-stats">
+                                            <?php if ( isset( $run->final_stats['products_exported'] ) ) : ?>
+                                                <span class="wpns-stat-item exported">
+                                                    <span class="dashicons dashicons-upload"></span>
+                                                    <?php printf( esc_html__( '%d exported', 'wp-nalda-sync' ), $run->final_stats['products_exported'] ); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                            <?php if ( isset( $run->final_stats['products_skipped'] ) && $run->final_stats['products_skipped'] > 0 ) : ?>
+                                                <span class="wpns-stat-item skipped">
+                                                    <span class="dashicons dashicons-dismiss"></span>
+                                                    <?php printf( esc_html__( '%d skipped', 'wp-nalda-sync' ), $run->final_stats['products_skipped'] ); ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                    <div class="wpns-run-badges">
+                                        <?php if ( $run->error_count > 0 ) : ?>
+                                            <span class="wpns-badge error"><?php echo esc_html( $run->error_count ); ?> <?php esc_html_e( 'errors', 'wp-nalda-sync' ); ?></span>
+                                        <?php endif; ?>
+                                        <?php if ( $run->warning_count > 0 ) : ?>
+                                            <span class="wpns-badge warning"><?php echo esc_html( $run->warning_count ); ?> <?php esc_html_e( 'warnings', 'wp-nalda-sync' ); ?></span>
+                                        <?php endif; ?>
+                                        <span class="wpns-badge info"><?php echo esc_html( $run->log_count ); ?> <?php esc_html_e( 'logs', 'wp-nalda-sync' ); ?></span>
+                                    </div>
+                                </div>
+                                <button type="button" class="wpns-run-toggle" aria-expanded="false">
+                                    <span class="dashicons dashicons-arrow-down-alt2"></span>
+                                </button>
+                            </div>
+                            <div class="wpns-run-details" style="display: none;">
+                                <table class="wpns-logs-table">
+                                    <thead>
+                                        <tr>
+                                            <th class="column-time"><?php esc_html_e( 'Time', 'wp-nalda-sync' ); ?></th>
+                                            <th class="column-level"><?php esc_html_e( 'Level', 'wp-nalda-sync' ); ?></th>
+                                            <th class="column-message"><?php esc_html_e( 'Message', 'wp-nalda-sync' ); ?></th>
+                                            <th class="column-context"><?php esc_html_e( 'Details', 'wp-nalda-sync' ); ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ( $run_logs as $log ) : 
+                                            $timestamp = strtotime( $log->timestamp );
+                                        ?>
+                                            <tr class="wpns-log-row" data-level="<?php echo esc_attr( $log->level ); ?>">
+                                                <td class="column-time">
+                                                    <span class="log-time"><?php echo esc_html( wp_date( 'H:i:s', $timestamp ) ); ?></span>
+                                                </td>
+                                                <td class="column-level">
+                                                    <span class="wpns-badge <?php echo esc_attr( $log->level ); ?>">
+                                                        <?php echo esc_html( ucfirst( $log->level ) ); ?>
+                                                    </span>
+                                                </td>
+                                                <td class="column-message"><?php echo esc_html( $log->message ); ?></td>
+                                                <td class="column-context">
+                                                    <?php if ( ! empty( $log->context ) ) : ?>
+                                                        <button type="button" class="button button-small wpns-view-context" 
+                                                                data-context="<?php echo esc_attr( $log->context ); ?>">
+                                                            <span class="dashicons dashicons-visibility"></span>
+                                                            <?php esc_html_e( 'View', 'wp-nalda-sync' ); ?>
+                                                        </button>
+                                                    <?php else : ?>
+                                                        <span class="wpns-text-muted">—</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
                 <?php endif; ?>
             </div>
 

@@ -227,17 +227,26 @@ final class WP_Nalda_Sync {
 
         $sql = "CREATE TABLE IF NOT EXISTS $table_name (
             id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            run_id varchar(36) NOT NULL DEFAULT '',
             timestamp datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             level varchar(20) NOT NULL DEFAULT 'info',
             message text NOT NULL,
             context longtext,
             PRIMARY KEY (id),
+            KEY run_id (run_id),
             KEY level (level),
             KEY timestamp (timestamp)
         ) $charset_collate;";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
+        
+        // Add run_id column if it doesn't exist (for upgrades)
+        $column = $wpdb->get_results( "SHOW COLUMNS FROM {$table_name} LIKE 'run_id'" );
+        if ( empty( $column ) ) {
+            $wpdb->query( "ALTER TABLE {$table_name} ADD COLUMN run_id varchar(36) NOT NULL DEFAULT '' AFTER id" );
+            $wpdb->query( "ALTER TABLE {$table_name} ADD INDEX run_id (run_id)" );
+        }
     }
 
     /**

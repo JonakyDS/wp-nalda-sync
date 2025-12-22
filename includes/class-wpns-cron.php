@@ -171,12 +171,14 @@ class WPNS_Cron {
     public function run_sync( $trigger = 'manual' ) {
         $start_time = microtime( true );
 
-        $this->logger->log_sync_start( $trigger );
+        // Start a new run and get the run ID
+        $run_id = $this->logger->start_run( $trigger );
 
         // Check if WooCommerce is active
         if ( ! class_exists( 'WooCommerce' ) ) {
             $message = __( 'WooCommerce is not active.', 'wp-nalda-sync' );
             $this->logger->log_sync_failure( $message );
+            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
             return array(
                 'success' => false,
                 'message' => $message,
@@ -189,6 +191,7 @@ class WPNS_Cron {
         if ( empty( $settings['sftp_host'] ) || empty( $settings['sftp_username'] ) ) {
             $message = __( 'SFTP settings are not configured.', 'wp-nalda-sync' );
             $this->logger->log_sync_failure( $message );
+            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
             return array(
                 'success' => false,
                 'message' => $message,
@@ -202,6 +205,7 @@ class WPNS_Cron {
         if ( ! $csv_result['success'] ) {
             $this->logger->log_sync_failure( $csv_result['message'] );
             $this->update_last_run( 'failed', 0 );
+            $this->logger->end_run( 'failed', array( 'reason' => $csv_result['message'] ) );
             return array(
                 'success' => false,
                 'message' => $csv_result['message'],
@@ -215,6 +219,7 @@ class WPNS_Cron {
         if ( ! $upload_result['success'] ) {
             $this->logger->log_sync_failure( $upload_result['message'] );
             $this->update_last_run( 'failed', $csv_result['exported_count'] ?? 0 );
+            $this->logger->end_run( 'failed', array( 'reason' => $upload_result['message'] ) );
             return array(
                 'success' => false,
                 'message' => $upload_result['message'],
@@ -237,10 +242,11 @@ class WPNS_Cron {
             'duration_seconds'  => $duration,
         );
 
-        $this->logger->log_sync_complete( $stats );
-
         // Update last run info
         $this->update_last_run( 'success', $csv_result['exported_count'] ?? 0, $stats );
+
+        // End the run with success
+        $this->logger->end_run( 'success', $stats );
 
         $message = sprintf(
             __( 'Sync completed successfully. Exported %d products in %s seconds.', 'wp-nalda-sync' ),
