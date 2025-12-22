@@ -545,8 +545,15 @@ class WPNS_Admin {
             return;
         }
 
-        $sync_runs  = $this->logger->get_sync_runs( 20 );
-        $log_counts = $this->logger->get_log_counts();
+        // Pagination settings
+        $per_page     = 10;
+        $current_page = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
+        $offset       = ( $current_page - 1 ) * $per_page;
+
+        $sync_runs   = $this->logger->get_sync_runs( $per_page, $offset );
+        $total_runs  = $this->logger->get_sync_runs_count();
+        $total_pages = ceil( $total_runs / $per_page );
+        $log_counts  = $this->logger->get_log_counts();
         ?>
         <div class="wrap wpns-admin-wrap">
             <h1>
@@ -746,6 +753,76 @@ class WPNS_Admin {
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
+
+            <?php if ( $total_pages > 1 ) : ?>
+                <div class="wpns-pagination">
+                    <span class="wpns-pagination-info">
+                        <?php
+                        printf(
+                            /* translators: 1: current page, 2: total pages, 3: total runs */
+                            esc_html__( 'Page %1$d of %2$d (%3$d total runs)', 'wp-nalda-sync' ),
+                            $current_page,
+                            $total_pages,
+                            $total_runs
+                        );
+                        ?>
+                    </span>
+                    <div class="wpns-pagination-links">
+                        <?php
+                        $base_url = admin_url( 'admin.php?page=wp-nalda-sync-logs' );
+                        
+                        // First page link
+                        if ( $current_page > 1 ) : ?>
+                            <a href="<?php echo esc_url( $base_url ); ?>" class="wpns-page-link first" title="<?php esc_attr_e( 'First page', 'wp-nalda-sync' ); ?>">
+                                <span class="dashicons dashicons-controls-skipback"></span>
+                            </a>
+                        <?php endif;
+                        
+                        // Previous page link
+                        if ( $current_page > 1 ) : ?>
+                            <a href="<?php echo esc_url( add_query_arg( 'paged', $current_page - 1, $base_url ) ); ?>" class="wpns-page-link prev" title="<?php esc_attr_e( 'Previous page', 'wp-nalda-sync' ); ?>">
+                                <span class="dashicons dashicons-arrow-left-alt2"></span>
+                            </a>
+                        <?php endif;
+                        
+                        // Page numbers
+                        $start_page = max( 1, $current_page - 2 );
+                        $end_page   = min( $total_pages, $current_page + 2 );
+                        
+                        if ( $start_page > 1 ) {
+                            echo '<span class="wpns-page-ellipsis">...</span>';
+                        }
+                        
+                        for ( $i = $start_page; $i <= $end_page; $i++ ) :
+                            if ( $i === $current_page ) : ?>
+                                <span class="wpns-page-link current"><?php echo esc_html( $i ); ?></span>
+                            <?php else : ?>
+                                <a href="<?php echo esc_url( add_query_arg( 'paged', $i, $base_url ) ); ?>" class="wpns-page-link">
+                                    <?php echo esc_html( $i ); ?>
+                                </a>
+                            <?php endif;
+                        endfor;
+                        
+                        if ( $end_page < $total_pages ) {
+                            echo '<span class="wpns-page-ellipsis">...</span>';
+                        }
+                        
+                        // Next page link
+                        if ( $current_page < $total_pages ) : ?>
+                            <a href="<?php echo esc_url( add_query_arg( 'paged', $current_page + 1, $base_url ) ); ?>" class="wpns-page-link next" title="<?php esc_attr_e( 'Next page', 'wp-nalda-sync' ); ?>">
+                                <span class="dashicons dashicons-arrow-right-alt2"></span>
+                            </a>
+                        <?php endif;
+                        
+                        // Last page link
+                        if ( $current_page < $total_pages ) : ?>
+                            <a href="<?php echo esc_url( add_query_arg( 'paged', $total_pages, $base_url ) ); ?>" class="wpns-page-link last" title="<?php esc_attr_e( 'Last page', 'wp-nalda-sync' ); ?>">
+                                <span class="dashicons dashicons-controls-skipforward"></span>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <!-- Context Modal -->
             <div id="wpns-context-modal" class="wpns-modal" style="display: none;">

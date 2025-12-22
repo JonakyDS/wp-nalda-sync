@@ -1063,3 +1063,79 @@
         display: none;
     }
 }
+
+/* Pagination Styles */
+.wpns-pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+    padding: 15px 20px;
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+}
+
+.wpns-pagination-info {
+    color: #646970;
+    font-size: 13px;
+}
+
+.wpns-pagination-links {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.wpns-page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    background: #f6f7f7;
+    border: 1px solid #dcdcde;
+    border-radius: 3px;
+    color: #2271b1;
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.15s ease;
+}
+
+.wpns-page-link:hover {
+    background: #f0f0f1;
+    border-color: #c3c4c7;
+    color: #135e96;
+}
+
+.wpns-page-link.current {
+    background: #2271b1;
+    border-color: #2271b1;
+    color: #fff;
+    font-weight: 600;
+}
+
+.wpns-page-link .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
+
+.wpns-page-ellipsis {
+    padding: 0 5px;
+    color: #646970;
+}
+
+@media screen and (max-width: 782px) {
+    .wpns-pagination {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+
+    .wpns-pagination-links {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}

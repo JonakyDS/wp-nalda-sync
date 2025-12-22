@@ -201,10 +201,11 @@ class WPNS_Logger {
     /**
      * Get all sync runs with their summaries
      *
-     * @param int $limit Number of runs to retrieve.
+     * @param int $limit  Number of runs to retrieve per page.
+     * @param int $offset Offset for pagination.
      * @return array
      */
-    public function get_sync_runs( $limit = 20 ) {
+    public function get_sync_runs( $limit = 20, $offset = 0 ) {
         global $wpdb;
 
         if ( ! $this->table_exists() ) {
@@ -225,8 +226,9 @@ class WPNS_Logger {
             FROM {$this->table_name}
             GROUP BY CASE WHEN run_id = '' THEN '__orphan__' ELSE run_id END
             ORDER BY ended_at DESC
-            LIMIT %d",
-            $limit
+            LIMIT %d OFFSET %d",
+            $limit,
+            $offset
         );
 
         $runs = $wpdb->get_results( $query );
@@ -287,6 +289,23 @@ class WPNS_Logger {
         }
 
         return $runs;
+    }
+
+    /**
+     * Get total count of sync runs for pagination
+     *
+     * @return int
+     */
+    public function get_sync_runs_count() {
+        global $wpdb;
+
+        if ( ! $this->table_exists() ) {
+            return 0;
+        }
+
+        $query = "SELECT COUNT(DISTINCT CASE WHEN run_id = '' THEN '__orphan__' ELSE run_id END) FROM {$this->table_name}";
+
+        return (int) $wpdb->get_var( $query );
     }
 
     /**
