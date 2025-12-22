@@ -132,16 +132,31 @@ class WPNS_CSV_Generator {
 
         // Generate filename
         $filename = $this->generate_filename();
-        $filepath = WP_Nalda_Sync::get_exports_dir() . '/' . $filename;
+        $exports_dir = WP_Nalda_Sync::get_exports_dir();
+        
+        // Ensure exports directory exists
+        if ( ! file_exists( $exports_dir ) ) {
+            wp_mkdir_p( $exports_dir );
+            file_put_contents( $exports_dir . '/index.php', '<?php // Silence is golden' );
+        }
+        
+        $filepath = $exports_dir . '/' . $filename;
 
         // Create CSV file
         $handle = fopen( $filepath, 'w' );
         if ( ! $handle ) {
-            $message = __( 'Failed to create CSV file.', 'wp-nalda-sync' );
-            $this->logger->error( $message );
+            $message = sprintf( 
+                __( 'Failed to create CSV file. Path: %s', 'wp-nalda-sync' ), 
+                $filepath 
+            );
+            $this->logger->error( $message, array(
+                'filepath' => $filepath,
+                'exports_dir_exists' => file_exists( $exports_dir ),
+                'exports_dir_writable' => is_writable( $exports_dir ),
+            ) );
             return array(
                 'success' => false,
-                'message' => $message,
+                'message' => __( 'Failed to create CSV file.', 'wp-nalda-sync' ),
             );
         }
 
