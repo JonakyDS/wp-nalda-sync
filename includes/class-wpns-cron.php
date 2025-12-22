@@ -114,8 +114,8 @@ class WPNS_Cron {
         // Clear any existing schedule
         $this->unschedule();
 
-        // Schedule new event starting 3 minutes from now
-        $first_run = time() + ( 3 * MINUTE_IN_SECONDS );
+        // Schedule new event starting 1 minute from now
+        $first_run = time() + MINUTE_IN_SECONDS;
         $result = wp_schedule_event( $first_run, $recurrence, self::CRON_HOOK );
 
         if ( $result ) {
