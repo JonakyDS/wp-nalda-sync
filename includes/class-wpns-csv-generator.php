@@ -133,18 +133,51 @@ class WPNS_CSV_Generator {
         // Generate filename
         $filename = $this->generate_filename();
         
-        // Use WordPress temp directory (always writable)
-        $temp_dir = get_temp_dir();
-        $filepath = $temp_dir . $filename;
+        // Try multiple temp directory options
+        $temp_dirs = array(
+            get_temp_dir(),
+            sys_get_temp_dir(),
+            WP_CONTENT_DIR . '/uploads/wpns-temp/',
+        );
 
-        // Create CSV file
-        $handle = fopen( $filepath, 'w' );
+        $filepath = null;
+        $handle   = null;
+        $temp_dir = null;
+
+        foreach ( $temp_dirs as $dir ) {
+            // Ensure trailing slash
+            $dir = trailingslashit( $dir );
+            
+            // Create directory if it doesn't exist (for uploads/wpns-temp)
+            if ( ! is_dir( $dir ) ) {
+                wp_mkdir_p( $dir );
+            }
+
+            if ( ! is_dir( $dir ) || ! is_writable( $dir ) ) {
+                continue;
+            }
+
+            $test_filepath = $dir . $filename;
+            
+            // Suppress warnings and capture the error
+            $handle = @fopen( $test_filepath, 'w' );
+            if ( $handle ) {
+                $filepath = $test_filepath;
+                $temp_dir = $dir;
+                break;
+            }
+        }
+
         if ( ! $handle ) {
-            $message = __( 'Failed to create CSV file in temp directory.', 'wp-nalda-sync' );
+            $message = __( 'Failed to create CSV file. Please check server permissions.', 'wp-nalda-sync' );
             $this->logger->error( $message, array(
-                'filepath' => $filepath,
-                'temp_dir' => $temp_dir,
-                'temp_dir_writable' => is_writable( $temp_dir ),
+                'filename'          => $filename,
+                'attempted_dirs'    => $temp_dirs,
+                'wp_temp_dir'       => get_temp_dir(),
+                'sys_temp_dir'      => sys_get_temp_dir(),
+                'upload_dir'        => WP_CONTENT_DIR . '/uploads/wpns-temp/',
+                'open_basedir'      => ini_get( 'open_basedir' ),
+                'last_error'        => error_get_last(),
             ) );
             return array(
                 'success' => false,
@@ -245,8 +278,23 @@ class WPNS_CSV_Generator {
      * @param string $filepath Path to the temp file.
      */
     public function cleanup_temp_file( $filepath ) {
-        if ( file_exists( $filepath ) && strpos( $filepath, get_temp_dir() ) === 0 ) {
-            @unlink( $filepath );
+        if ( ! file_exists( $filepath ) ) {
+            return;
+        }
+
+        // Check if file is in an allowed temp directory
+        $allowed_dirs = array(
+            get_temp_dir(),
+            sys_get_temp_dir(),
+            WP_CONTENT_DIR . '/uploads/wpns-temp/',
+        );
+
+        foreach ( $allowed_dirs as $dir ) {
+            $dir = trailingslashit( $dir );
+            if ( strpos( $filepath, $dir ) === 0 ) {
+                @unlink( $filepath );
+                return;
+            }
         }
     }
 
@@ -727,11 +775,16 @@ class WPNS_CSV_Generator {
      * @return string
      */
     private function generate_filename() {
-        $pattern = $this->plugin_settings['filename_pattern'] ?? 'products_{date}.csv';
+        $pattern = $this->plugin_settings['filename_pattern'] ?? '';
+        
+        // Default pattern if empty or invalid
+        if ( empty( $pattern ) || strpos( $pattern, '{' ) === false ) {
+            $pattern = 'products_{date}.csv';
+        }
 
         $replacements = array(
-            '{date}'      => date( 'Y-m-d' ),
-            '{datetime}'  => date( 'Y-m-d_H-i-s' ),
+            '{date}'      => gmdate( 'Y-m-d' ),
+            '{datetime}'  => gmdate( 'Y-m-d_H-i-s' ),
             '{timestamp}' => time(),
         );
 
