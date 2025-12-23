@@ -3,7 +3,7 @@
  * Plugin Name: WP Nalda Sync
  * Plugin URI: https://github.com/JonakyDS/wp-nalda-sync
  * Description: Automatically generates product CSV feeds from WooCommerce and uploads them to SFTP servers.
- * Version: 1.0.13
+ * Version: 1.1.0
  * Author: Jonaky Adhikary
  * Author URI: https://jonakyds.com
  * License: GPL v2 or later
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'WPNS_VERSION', '1.0.13' );
+define( 'WPNS_VERSION', '1.1.0' );
 define( 'WPNS_PLUGIN_FILE', __FILE__ );
 define( 'WPNS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPNS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -67,6 +67,8 @@ final class WP_Nalda_Sync {
     public $sftp_uploader;
     public $logger;
     public $cron;
+    public $nalda_api;
+    public $order_importer;
 
     /**
      * Get single instance of the class
@@ -132,6 +134,8 @@ final class WP_Nalda_Sync {
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-sftp-uploader.php';
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-cron.php';
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-github-updater.php';
+        require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-nalda-api.php';
+        require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-order-importer.php';
 
         // Admin classes
         if ( is_admin() ) {
@@ -173,10 +177,12 @@ final class WP_Nalda_Sync {
         $this->logger        = new WPNS_Logger();
         $this->csv_generator = new WPNS_CSV_Generator( $this->logger );
         $this->sftp_uploader = new WPNS_SFTP_Uploader( $this->logger );
-        $this->cron          = new WPNS_Cron( $this->csv_generator, $this->sftp_uploader, $this->logger );
+        $this->nalda_api     = new WPNS_Nalda_API( $this->logger );
+        $this->order_importer = new WPNS_Order_Importer( $this->nalda_api, $this->logger );
+        $this->cron          = new WPNS_Cron( $this->csv_generator, $this->sftp_uploader, $this->logger, $this->order_importer );
 
         if ( is_admin() ) {
-            $this->admin = new WPNS_Admin( $this->logger, $this->csv_generator, $this->sftp_uploader, $this->cron );
+            $this->admin = new WPNS_Admin( $this->logger, $this->csv_generator, $this->sftp_uploader, $this->cron, $this->nalda_api, $this->order_importer );
         }
     }
 
@@ -186,17 +192,24 @@ final class WP_Nalda_Sync {
     public function activate() {
         // Set default options
         $default_options = array(
-            'sftp_host'        => '',
-            'sftp_port'        => '22',
-            'sftp_username'    => '',
-            'sftp_password'    => '',
-            'sftp_path'        => '/',
-            'schedule'         => 'daily',
-            'filename_pattern' => 'products_{date}.csv',
-            'batch_size'       => 100,
-            'enabled'          => false,
-            'delivery_time'    => 3,
-            'return_days'      => 14,
+            'sftp_host'              => '',
+            'sftp_port'              => '22',
+            'sftp_username'          => '',
+            'sftp_password'          => '',
+            'sftp_path'              => '/',
+            'schedule'               => 'daily',
+            'filename_pattern'       => 'products_{date}.csv',
+            'batch_size'             => 100,
+            'enabled'                => false,
+            'delivery_time'          => 3,
+            'return_days'            => 14,
+            // Order import settings
+            'nalda_api_key'          => '',
+            'nalda_api_url'          => 'https://api.nalda.com',
+            'order_sync_enabled'     => false,
+            'order_sync_schedule'    => 'hourly',
+            'order_sync_range'       => 'today',
+            'order_import_mode'      => 'all',
         );
 
         if ( ! get_option( 'wpns_settings' ) ) {
@@ -249,6 +262,7 @@ final class WP_Nalda_Sync {
     public function deactivate() {
         // Clear scheduled cron events
         wp_clear_scheduled_hook( 'wpns_sync_event' );
+        wp_clear_scheduled_hook( 'wpns_order_sync_event' );
 
         // Flush rewrite rules
         flush_rewrite_rules();

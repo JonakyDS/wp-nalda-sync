@@ -1,30 +1,44 @@
 === WP Nalda Sync ===
 Contributors: yourname
-Tags: woocommerce, csv, export, sftp, product feed, sync
+Tags: woocommerce, csv, export, sftp, product feed, sync, nalda, marketplace, orders
 Requires at least: 5.8
 Tested up to: 6.4
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Automatically generates product CSV feeds from WooCommerce and uploads them to SFTP servers.
+Sync your WooCommerce products to Nalda Marketplace via SFTP and import orders from Nalda to your store.
 
 == Description ==
 
-WP Nalda Sync is a powerful WordPress plugin that automatically exports your WooCommerce products to a CSV file and uploads it to an SFTP server. Perfect for integrating with marketplaces, price comparison websites, or any system that requires product data feeds.
+WP Nalda Sync is a powerful WordPress plugin that provides two-way synchronization with Nalda Marketplace:
+
+1. **Product Export**: Automatically exports your WooCommerce products to a CSV file and uploads it to Nalda via SFTP.
+2. **Order Import**: Automatically imports and syncs orders from Nalda Marketplace to your WooCommerce store.
 
 = Features =
 
+**Product Sync (Export)**
 * **Automatic CSV Generation**: Creates CSV files with comprehensive product data including GTIN/EAN, pricing, dimensions, images, and more.
 * **SFTP Upload**: Securely uploads generated CSV files to your SFTP server using password-based authentication.
 * **WooCommerce Integration**: Automatically imports settings like country, currency, and tax rates from WooCommerce.
 * **Scheduled Sync**: Run syncs hourly, twice daily, daily, or weekly.
-* **Detailed Logging**: Track every sync operation with comprehensive logs.
-* **Smart Filtering**: Automatically skips products without GTIN or price.
 * **Variable Products Support**: Exports each variation as a separate row.
+
+**Order Sync (Import)** - NEW!
+* **Automatic Order Import**: Import orders from Nalda Marketplace to WooCommerce.
+* **Scheduled Syncing**: Configure hourly, twice daily, or daily order syncs.
+* **Status Synchronization**: Automatically updates order status based on Nalda delivery status.
+* **Flexible Date Ranges**: Sync orders from today, yesterday, current month, or custom ranges.
+* **Two Import Modes**: Import all orders or sync existing orders only.
+* **GTIN Product Matching**: Automatically matches order items to your WooCommerce products by GTIN/EAN.
+* **Nalda Metadata**: Track Nalda order ID, delivery status, payout status, commission, and fees.
+
+**General**
+* **Detailed Logging**: Track every sync operation with comprehensive logs.
 * **Manual Sync**: Run sync operations manually whenever needed.
-* **Connection Testing**: Test your SFTP connection before scheduling syncs.
+* **Connection Testing**: Test both SFTP and Nalda API connections.
 * **CSV Preview**: Download generated CSV files for review before uploading.
 
 = CSV Format =
@@ -106,13 +120,44 @@ You can schedule syncs hourly, twice daily, daily, or weekly. Manual syncs can b
 
 Yes, SFTP passwords are encrypted before being stored in the database using WordPress salts.
 
+= How do I get my Nalda API key? =
+
+1. Visit the [Nalda Seller Portal](https://sellers.nalda.com/)
+2. Navigate to Orders/Bestellungen
+3. Click the Settings icon in the top right corner
+4. Generate or copy your API key
+
+= What order data is imported from Nalda? =
+
+Orders imported from Nalda include: customer details, shipping address, order items with GTIN, pricing, delivery status, payout status, commission, and fees.
+
+= How are Nalda delivery statuses mapped to WooCommerce? =
+
+- IN_PREPARATION, IN_DELIVERY, READY_TO_COLLECT → Processing
+- DELIVERED, COLLECTED → Completed
+- CANCELLED → Cancelled
+- RETURNED → Refunded
+- UNDELIVERABLE, NOT_PICKED_UP → Failed
+- DISPUTE → On Hold
+
 == Screenshots ==
 
 1. Settings page with status cards showing sync status and WooCommerce settings
 2. SFTP configuration options
-3. Detailed sync logs with filtering options
+3. Order Sync page with import statistics and recent orders
+4. Detailed sync logs with filtering options
 
 == Changelog ==
+
+= 1.1.0 =
+* NEW: Order import from Nalda Marketplace
+* NEW: Nalda API integration
+* NEW: Order Sync admin page
+* NEW: Automatic order status synchronization
+* NEW: Scheduled order import (hourly, twice daily, daily)
+* NEW: GTIN-based product matching for order items
+* NEW: Nalda metadata stored on orders (order ID, delivery status, payout status, commission, fees)
+* Improved admin interface with order management
 
 = 1.0.0 =
 * Initial release
@@ -123,6 +168,9 @@ Yes, SFTP passwords are encrypted before being stored in the database using Word
 * Admin dashboard with status cards
 
 == Upgrade Notice ==
+
+= 1.1.0 =
+Major update! Now includes order import from Nalda Marketplace. Configure your Nalda API key in Settings to start syncing orders.
 
 = 1.0.0 =
 Initial release of WP Nalda Sync.

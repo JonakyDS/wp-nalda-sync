@@ -43,18 +43,36 @@ class WPNS_Admin {
     private $cron;
 
     /**
+     * Nalda API instance
+     *
+     * @var WPNS_Nalda_API
+     */
+    private $nalda_api;
+
+    /**
+     * Order Importer instance
+     *
+     * @var WPNS_Order_Importer
+     */
+    private $order_importer;
+
+    /**
      * Constructor
      *
-     * @param WPNS_Logger        $logger        Logger instance.
-     * @param WPNS_CSV_Generator $csv_generator CSV Generator instance.
-     * @param WPNS_SFTP_Uploader $sftp_uploader SFTP Uploader instance.
-     * @param WPNS_Cron          $cron          Cron instance.
+     * @param WPNS_Logger         $logger         Logger instance.
+     * @param WPNS_CSV_Generator  $csv_generator  CSV Generator instance.
+     * @param WPNS_SFTP_Uploader  $sftp_uploader  SFTP Uploader instance.
+     * @param WPNS_Cron           $cron           Cron instance.
+     * @param WPNS_Nalda_API      $nalda_api      Nalda API instance.
+     * @param WPNS_Order_Importer $order_importer Order Importer instance.
      */
-    public function __construct( $logger, $csv_generator, $sftp_uploader, $cron ) {
-        $this->logger        = $logger;
-        $this->csv_generator = $csv_generator;
-        $this->sftp_uploader = $sftp_uploader;
-        $this->cron          = $cron;
+    public function __construct( $logger, $csv_generator, $sftp_uploader, $cron, $nalda_api = null, $order_importer = null ) {
+        $this->logger         = $logger;
+        $this->csv_generator  = $csv_generator;
+        $this->sftp_uploader  = $sftp_uploader;
+        $this->cron           = $cron;
+        $this->nalda_api      = $nalda_api;
+        $this->order_importer = $order_importer;
 
         $this->init_hooks();
     }
@@ -73,6 +91,8 @@ class WPNS_Admin {
         add_action( 'wp_ajax_wpns_clear_logs', array( $this, 'ajax_clear_logs' ) );
         add_action( 'wp_ajax_wpns_get_logs', array( $this, 'ajax_get_logs' ) );
         add_action( 'wp_ajax_wpns_download_csv', array( $this, 'ajax_download_csv' ) );
+        add_action( 'wp_ajax_wpns_test_nalda_api', array( $this, 'ajax_test_nalda_api' ) );
+        add_action( 'wp_ajax_wpns_run_order_sync', array( $this, 'ajax_run_order_sync' ) );
 
         // Settings link on plugins page
         add_filter( 'plugin_action_links_' . WPNS_PLUGIN_BASENAME, array( $this, 'add_settings_link' ) );
@@ -99,6 +119,15 @@ class WPNS_Admin {
             'manage_woocommerce',
             'wp-nalda-sync',
             array( $this, 'render_settings_page' )
+        );
+
+        add_submenu_page(
+            'wp-nalda-sync',
+            __( 'Order Sync', 'wp-nalda-sync' ),
+            __( 'Order Sync', 'wp-nalda-sync' ),
+            'manage_woocommerce',
+            'wp-nalda-sync-orders',
+            array( $this, 'render_orders_page' )
         );
 
         add_submenu_page(
@@ -291,6 +320,83 @@ class WPNS_Admin {
                 'description' => __( 'Enable or disable automatic scheduled sync.', 'wp-nalda-sync' ),
             )
         );
+
+        // Nalda API Settings Section
+        add_settings_section(
+            'wpns_nalda_api_section',
+            __( 'Nalda API Settings', 'wp-nalda-sync' ),
+            array( $this, 'render_nalda_api_section' ),
+            'wp-nalda-sync'
+        );
+
+        add_settings_field(
+            'nalda_api_key',
+            __( 'Nalda API Key', 'wp-nalda-sync' ),
+            array( $this, 'render_password_field' ),
+            'wp-nalda-sync',
+            'wpns_nalda_api_section',
+            array(
+                'field'       => 'nalda_api_key',
+                'description' => __( 'API key obtained from the Nalda Seller Portal (Orders → Settings).', 'wp-nalda-sync' ),
+            )
+        );
+
+        add_settings_field(
+            'nalda_api_url',
+            __( 'Nalda API URL', 'wp-nalda-sync' ),
+            array( $this, 'render_text_field' ),
+            'wp-nalda-sync',
+            'wpns_nalda_api_section',
+            array(
+                'field'       => 'nalda_api_url',
+                'placeholder' => 'https://api.nalda.com',
+                'description' => __( 'Leave default unless instructed otherwise.', 'wp-nalda-sync' ),
+            )
+        );
+
+        // Order Sync Settings Section
+        add_settings_section(
+            'wpns_order_sync_section',
+            __( 'Order Sync Settings', 'wp-nalda-sync' ),
+            array( $this, 'render_order_sync_section' ),
+            'wp-nalda-sync'
+        );
+
+        add_settings_field(
+            'order_sync_enabled',
+            __( 'Enable Order Sync', 'wp-nalda-sync' ),
+            array( $this, 'render_checkbox_field' ),
+            'wp-nalda-sync',
+            'wpns_order_sync_section',
+            array(
+                'field'       => 'order_sync_enabled',
+                'description' => __( 'Enable automatic order import from Nalda Marketplace.', 'wp-nalda-sync' ),
+            )
+        );
+
+        add_settings_field(
+            'order_sync_schedule',
+            __( 'Order Sync Schedule', 'wp-nalda-sync' ),
+            array( $this, 'render_order_sync_schedule_field' ),
+            'wp-nalda-sync',
+            'wpns_order_sync_section'
+        );
+
+        add_settings_field(
+            'order_sync_range',
+            __( 'Order Sync Range', 'wp-nalda-sync' ),
+            array( $this, 'render_order_sync_range_field' ),
+            'wp-nalda-sync',
+            'wpns_order_sync_section'
+        );
+
+        add_settings_field(
+            'order_import_mode',
+            __( 'Import Mode', 'wp-nalda-sync' ),
+            array( $this, 'render_order_import_mode_field' ),
+            'wp-nalda-sync',
+            'wpns_order_sync_section'
+        );
     }
 
     /**
@@ -307,7 +413,7 @@ class WPNS_Admin {
         $sanitized['sftp_port']        = absint( $input['sftp_port'] ?? 22 );
         $sanitized['sftp_username']    = sanitize_text_field( $input['sftp_username'] ?? '' );
         
-        // Handle password - encrypt if changed
+        // Handle SFTP password - encrypt if changed
         if ( ! empty( $input['sftp_password'] ) ) {
             $sanitized['sftp_password'] = $this->encrypt_password( $input['sftp_password'] );
         } else {
@@ -327,7 +433,21 @@ class WPNS_Admin {
         $sanitized['return_days']      = absint( $input['return_days'] ?? 14 );
         $sanitized['enabled']          = ! empty( $input['enabled'] );
 
-        // Update cron schedule if changed (also check custom interval)
+        // Nalda API settings
+        if ( ! empty( $input['nalda_api_key'] ) ) {
+            $sanitized['nalda_api_key'] = $this->encrypt_password( $input['nalda_api_key'] );
+        } else {
+            $sanitized['nalda_api_key'] = $old_settings['nalda_api_key'] ?? '';
+        }
+        $sanitized['nalda_api_url'] = esc_url_raw( $input['nalda_api_url'] ?? 'https://api.nalda.com' );
+
+        // Order sync settings
+        $sanitized['order_sync_enabled']  = ! empty( $input['order_sync_enabled'] );
+        $sanitized['order_sync_schedule'] = sanitize_key( $input['order_sync_schedule'] ?? 'hourly' );
+        $sanitized['order_sync_range']    = sanitize_key( $input['order_sync_range'] ?? 'today' );
+        $sanitized['order_import_mode']   = sanitize_key( $input['order_import_mode'] ?? 'all' );
+
+        // Update product sync cron schedule if changed
         $schedule_changed = $sanitized['enabled'] !== ( $old_settings['enabled'] ?? false ) ||
                            $sanitized['schedule'] !== ( $old_settings['schedule'] ?? 'daily' ) ||
                            ( $sanitized['schedule'] === 'wpns_custom' && 
@@ -335,6 +455,14 @@ class WPNS_Admin {
 
         if ( $schedule_changed ) {
             $this->cron->reschedule( $sanitized['enabled'], $sanitized['schedule'] );
+        }
+
+        // Update order sync cron schedule if changed
+        $order_sync_changed = $sanitized['order_sync_enabled'] !== ( $old_settings['order_sync_enabled'] ?? false ) ||
+                              $sanitized['order_sync_schedule'] !== ( $old_settings['order_sync_schedule'] ?? 'hourly' );
+
+        if ( $order_sync_changed ) {
+            $this->cron->reschedule_order_sync( $sanitized['order_sync_enabled'], $sanitized['order_sync_schedule'] );
         }
 
         $this->logger->info( __( 'Settings updated', 'wp-nalda-sync' ) );
@@ -399,14 +527,16 @@ class WPNS_Admin {
             'ajax_url'          => admin_url( 'admin-ajax.php' ),
             'nonce'             => wp_create_nonce( 'wpns_admin_nonce' ),
             'strings'           => array(
-                'testing'       => __( 'Testing connection...', 'wp-nalda-sync' ),
-                'syncing'       => __( 'Running sync...', 'wp-nalda-sync' ),
-                'success'       => __( 'Success!', 'wp-nalda-sync' ),
-                'error'         => __( 'Error:', 'wp-nalda-sync' ),
-                'confirm_clear' => __( 'Are you sure you want to clear all logs?', 'wp-nalda-sync' ),
-                'clearing'      => __( 'Clearing logs...', 'wp-nalda-sync' ),
-                'cleared'       => __( 'Logs cleared successfully.', 'wp-nalda-sync' ),
-                'loading'       => __( 'Loading...', 'wp-nalda-sync' ),
+                'testing'           => __( 'Testing connection...', 'wp-nalda-sync' ),
+                'syncing'           => __( 'Running sync...', 'wp-nalda-sync' ),
+                'success'           => __( 'Success!', 'wp-nalda-sync' ),
+                'error'             => __( 'Error:', 'wp-nalda-sync' ),
+                'confirm_clear'     => __( 'Are you sure you want to clear all logs?', 'wp-nalda-sync' ),
+                'clearing'          => __( 'Clearing logs...', 'wp-nalda-sync' ),
+                'cleared'           => __( 'Logs cleared successfully.', 'wp-nalda-sync' ),
+                'loading'           => __( 'Loading...', 'wp-nalda-sync' ),
+                'importing_orders'  => __( 'Importing orders from Nalda...', 'wp-nalda-sync' ),
+                'testing_api'       => __( 'Testing Nalda API...', 'wp-nalda-sync' ),
             ),
         ) );
     }
@@ -1153,5 +1283,319 @@ class WPNS_Admin {
         } else {
             wp_send_json_error( $result['message'] );
         }
+    }
+
+    /**
+     * AJAX: Test Nalda API connection
+     */
+    public function ajax_test_nalda_api() {
+        check_ajax_referer( 'wpns_admin_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-nalda-sync' ) );
+        }
+
+        if ( ! $this->nalda_api ) {
+            wp_send_json_error( __( 'Nalda API not initialized.', 'wp-nalda-sync' ) );
+        }
+
+        $result = $this->nalda_api->test_connection();
+
+        if ( $result['success'] ) {
+            $this->logger->success( __( 'Nalda API connection test successful', 'wp-nalda-sync' ) );
+            wp_send_json_success( $result['message'] );
+        } else {
+            $this->logger->error( __( 'Nalda API connection test failed', 'wp-nalda-sync' ), array( 'error' => $result['message'] ) );
+            wp_send_json_error( $result['message'] );
+        }
+    }
+
+    /**
+     * AJAX: Run order sync manually
+     */
+    public function ajax_run_order_sync() {
+        check_ajax_referer( 'wpns_admin_nonce', 'nonce' );
+
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            wp_send_json_error( __( 'Permission denied.', 'wp-nalda-sync' ) );
+        }
+
+        $result = $this->cron->run_order_sync( 'manual' );
+
+        if ( $result['success'] ) {
+            wp_send_json_success( array(
+                'message' => $result['message'],
+                'stats'   => $result['stats'] ?? array(),
+            ) );
+        } else {
+            wp_send_json_error( $result['message'] );
+        }
+    }
+
+    /**
+     * Render Nalda API section description
+     */
+    public function render_nalda_api_section() {
+        echo '<p>' . esc_html__( 'Configure your Nalda Marketplace API settings. Get your API key from the Nalda Seller Portal (Orders → Settings).', 'wp-nalda-sync' ) . '</p>';
+    }
+
+    /**
+     * Render order sync section description
+     */
+    public function render_order_sync_section() {
+        echo '<p>' . esc_html__( 'Configure how orders are imported from Nalda Marketplace to your WooCommerce store.', 'wp-nalda-sync' ) . '</p>';
+    }
+
+    /**
+     * Render order sync schedule field
+     */
+    public function render_order_sync_schedule_field() {
+        $settings = get_option( 'wpns_settings', array() );
+        $schedule = $settings['order_sync_schedule'] ?? 'hourly';
+        $schedules = array(
+            'hourly'      => __( 'Hourly', 'wp-nalda-sync' ),
+            'twicedaily'  => __( 'Twice Daily', 'wp-nalda-sync' ),
+            'daily'       => __( 'Daily', 'wp-nalda-sync' ),
+        );
+        ?>
+        <select id="wpns_order_sync_schedule" name="wpns_settings[order_sync_schedule]" class="regular-text">
+            <?php foreach ( $schedules as $value => $label ) : ?>
+                <option value="<?php echo esc_attr( $value ); ?>" <?php selected( $schedule, $value ); ?>>
+                    <?php echo esc_html( $label ); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <p class="description"><?php esc_html_e( 'How often to check Nalda for new orders.', 'wp-nalda-sync' ); ?></p>
+        <?php
+    }
+
+    /**
+     * Render order sync range field
+     */
+    public function render_order_sync_range_field() {
+        $settings = get_option( 'wpns_settings', array() );
+        $range = $settings['order_sync_range'] ?? 'today';
+        $ranges = WPNS_Nalda_API::get_date_range_options();
+        ?>
+        <select id="wpns_order_sync_range" name="wpns_settings[order_sync_range]" class="regular-text">
+            <?php foreach ( $ranges as $value => $label ) : ?>
+                <option value="<?php echo esc_attr( $value ); ?>" <?php selected( $range, $value ); ?>>
+                    <?php echo esc_html( $label ); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <p class="description"><?php esc_html_e( 'Date range for fetching orders from Nalda.', 'wp-nalda-sync' ); ?></p>
+        <?php
+    }
+
+    /**
+     * Render order import mode field
+     */
+    public function render_order_import_mode_field() {
+        $settings = get_option( 'wpns_settings', array() );
+        $mode = $settings['order_import_mode'] ?? 'all';
+        $modes = array(
+            'all'       => __( 'Import all orders (create new + update existing)', 'wp-nalda-sync' ),
+            'sync_only' => __( 'Sync only (update existing orders only)', 'wp-nalda-sync' ),
+        );
+        ?>
+        <select id="wpns_order_import_mode" name="wpns_settings[order_import_mode]" class="regular-text">
+            <?php foreach ( $modes as $value => $label ) : ?>
+                <option value="<?php echo esc_attr( $value ); ?>" <?php selected( $mode, $value ); ?>>
+                    <?php echo esc_html( $label ); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <p class="description"><?php esc_html_e( 'Choose whether to create new orders or only update existing ones.', 'wp-nalda-sync' ); ?></p>
+        <?php
+    }
+
+    /**
+     * Render orders page
+     */
+    public function render_orders_page() {
+        if ( ! current_user_can( 'manage_woocommerce' ) ) {
+            return;
+        }
+
+        $settings        = get_option( 'wpns_settings', array() );
+        $order_sync_stats = $this->cron->get_order_sync_stats();
+        $last_import     = $this->order_importer ? $this->order_importer->get_last_import_stats() : array();
+        $imported_count  = $this->order_importer ? $this->order_importer->count_imported_orders() : 0;
+        $next_sync       = $this->cron->get_next_order_sync();
+        ?>
+        <div class="wrap wpns-admin-wrap">
+            <h1>
+                <span class="dashicons dashicons-cart"></span>
+                <?php esc_html_e( 'Nalda Order Sync', 'wp-nalda-sync' ); ?>
+            </h1>
+
+            <!-- Status Cards -->
+            <div class="wpns-status-cards">
+                <div class="wpns-card wpns-card-status">
+                    <h3><?php esc_html_e( 'Order Sync Status', 'wp-nalda-sync' ); ?></h3>
+                    <div class="wpns-status-indicator <?php echo ! empty( $settings['order_sync_enabled'] ) ? 'active' : 'inactive'; ?>">
+                        <span class="status-dot"></span>
+                        <span class="status-text">
+                            <?php echo ! empty( $settings['order_sync_enabled'] ) 
+                                ? esc_html__( 'Active', 'wp-nalda-sync' ) 
+                                : esc_html__( 'Inactive', 'wp-nalda-sync' ); ?>
+                        </span>
+                    </div>
+                    <?php if ( $next_sync ) : ?>
+                        <p class="next-run">
+                            <strong><?php esc_html_e( 'Next sync:', 'wp-nalda-sync' ); ?></strong><br>
+                            <?php echo esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), $next_sync ) ); ?>
+                        </p>
+                    <?php endif; ?>
+                    <p>
+                        <strong><?php esc_html_e( 'Schedule:', 'wp-nalda-sync' ); ?></strong>
+                        <?php echo esc_html( WPNS_Cron::get_schedule_display_name( $settings['order_sync_schedule'] ?? 'hourly' ) ); ?>
+                    </p>
+                </div>
+
+                <div class="wpns-card wpns-card-last-run">
+                    <h3><?php esc_html_e( 'Last Import', 'wp-nalda-sync' ); ?></h3>
+                    <?php if ( ! empty( $last_import ) ) : ?>
+                        <p>
+                            <strong><?php esc_html_e( 'Time:', 'wp-nalda-sync' ); ?></strong>
+                            <?php echo esc_html( wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $last_import['timestamp'] ?? '' ) ) ); ?>
+                        </p>
+                        <?php if ( isset( $last_import['fetched'] ) ) : ?>
+                            <p>
+                                <strong><?php esc_html_e( 'Fetched:', 'wp-nalda-sync' ); ?></strong>
+                                <?php echo esc_html( $last_import['fetched'] ); ?>
+                            </p>
+                        <?php endif; ?>
+                        <?php if ( isset( $last_import['imported'] ) ) : ?>
+                            <p>
+                                <strong><?php esc_html_e( 'Imported:', 'wp-nalda-sync' ); ?></strong>
+                                <?php echo esc_html( $last_import['imported'] ); ?>
+                            </p>
+                        <?php endif; ?>
+                        <?php if ( isset( $last_import['updated'] ) ) : ?>
+                            <p>
+                                <strong><?php esc_html_e( 'Updated:', 'wp-nalda-sync' ); ?></strong>
+                                <?php echo esc_html( $last_import['updated'] ); ?>
+                            </p>
+                        <?php endif; ?>
+                    <?php else : ?>
+                        <p class="no-data"><?php esc_html_e( 'No import has been run yet.', 'wp-nalda-sync' ); ?></p>
+                    <?php endif; ?>
+                </div>
+
+                <div class="wpns-card wpns-card-stats">
+                    <h3><?php esc_html_e( 'Statistics', 'wp-nalda-sync' ); ?></h3>
+                    <p>
+                        <strong><?php esc_html_e( 'Total Nalda Orders:', 'wp-nalda-sync' ); ?></strong>
+                        <?php echo esc_html( $imported_count ); ?>
+                    </p>
+                    <p>
+                        <strong><?php esc_html_e( 'Import Range:', 'wp-nalda-sync' ); ?></strong>
+                        <?php 
+                        $ranges = WPNS_Nalda_API::get_date_range_options();
+                        echo esc_html( $ranges[ $settings['order_sync_range'] ?? 'today' ] ?? $settings['order_sync_range'] ?? 'Today' ); 
+                        ?>
+                    </p>
+                    <p>
+                        <strong><?php esc_html_e( 'Import Mode:', 'wp-nalda-sync' ); ?></strong>
+                        <?php echo ( $settings['order_import_mode'] ?? 'all' ) === 'all' 
+                            ? esc_html__( 'Import All', 'wp-nalda-sync' ) 
+                            : esc_html__( 'Sync Only', 'wp-nalda-sync' ); ?>
+                    </p>
+                </div>
+
+                <div class="wpns-card wpns-card-actions">
+                    <h3><?php esc_html_e( 'Quick Actions', 'wp-nalda-sync' ); ?></h3>
+                    <button type="button" id="wpns-test-nalda-api" class="button button-secondary">
+                        <span class="dashicons dashicons-admin-plugins"></span>
+                        <?php esc_html_e( 'Test API Connection', 'wp-nalda-sync' ); ?>
+                    </button>
+                    <button type="button" id="wpns-run-order-sync" class="button button-primary">
+                        <span class="dashicons dashicons-download"></span>
+                        <?php esc_html_e( 'Import Orders Now', 'wp-nalda-sync' ); ?>
+                    </button>
+                    <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=shop_order&meta_key=_wpns_nalda_order_id&meta_compare=EXISTS' ) ); ?>" class="button button-secondary">
+                        <span class="dashicons dashicons-visibility"></span>
+                        <?php esc_html_e( 'View Nalda Orders', 'wp-nalda-sync' ); ?>
+                    </a>
+                    <div id="wpns-order-action-result" class="wpns-action-result"></div>
+                </div>
+            </div>
+
+            <!-- API Configuration Info -->
+            <div class="wpns-info-box">
+                <h3><?php esc_html_e( 'How to Get Your Nalda API Key', 'wp-nalda-sync' ); ?></h3>
+                <ol>
+                    <li><?php esc_html_e( 'Visit the Nalda Seller Portal at', 'wp-nalda-sync' ); ?> <a href="https://sellers.nalda.com/" target="_blank">sellers.nalda.com</a></li>
+                    <li><?php esc_html_e( 'Navigate to Orders/Bestellungen', 'wp-nalda-sync' ); ?></li>
+                    <li><?php esc_html_e( 'Click the Settings icon in the top right corner', 'wp-nalda-sync' ); ?></li>
+                    <li><?php esc_html_e( 'Generate or copy your API key', 'wp-nalda-sync' ); ?></li>
+                </ol>
+                <p>
+                    <a href="<?php echo esc_url( admin_url( 'admin.php?page=wp-nalda-sync#wpns_nalda_api_section' ) ); ?>" class="button">
+                        <?php esc_html_e( 'Configure API Settings', 'wp-nalda-sync' ); ?>
+                    </a>
+                </p>
+            </div>
+
+            <!-- Recent Imported Orders -->
+            <?php if ( $this->order_importer && $imported_count > 0 ) : 
+                $recent_orders = $this->order_importer->get_imported_orders( 10, 0 );
+            ?>
+            <div class="wpns-orders-list">
+                <h3><?php esc_html_e( 'Recent Nalda Orders', 'wp-nalda-sync' ); ?></h3>
+                <table class="widefat striped">
+                    <thead>
+                        <tr>
+                            <th><?php esc_html_e( 'WC Order', 'wp-nalda-sync' ); ?></th>
+                            <th><?php esc_html_e( 'Nalda Order ID', 'wp-nalda-sync' ); ?></th>
+                            <th><?php esc_html_e( 'Customer', 'wp-nalda-sync' ); ?></th>
+                            <th><?php esc_html_e( 'Status', 'wp-nalda-sync' ); ?></th>
+                            <th><?php esc_html_e( 'Delivery Status', 'wp-nalda-sync' ); ?></th>
+                            <th><?php esc_html_e( 'Payout Status', 'wp-nalda-sync' ); ?></th>
+                            <th><?php esc_html_e( 'Total', 'wp-nalda-sync' ); ?></th>
+                            <th><?php esc_html_e( 'Synced At', 'wp-nalda-sync' ); ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $recent_orders as $order ) : 
+                            $nalda_order_id = $order->get_meta( WPNS_Order_Importer::META_NALDA_ORDER_ID );
+                            $delivery_status = $order->get_meta( WPNS_Order_Importer::META_NALDA_DELIVERY_STATUS );
+                            $payout_status = $order->get_meta( WPNS_Order_Importer::META_NALDA_PAYOUT_STATUS );
+                            $synced_at = $order->get_meta( WPNS_Order_Importer::META_NALDA_SYNCED_AT );
+                        ?>
+                            <tr>
+                                <td>
+                                    <a href="<?php echo esc_url( $order->get_edit_order_url() ); ?>">
+                                        #<?php echo esc_html( $order->get_id() ); ?>
+                                    </a>
+                                </td>
+                                <td><?php echo esc_html( $nalda_order_id ); ?></td>
+                                <td><?php echo esc_html( $order->get_billing_first_name() . ' ' . $order->get_billing_last_name() ); ?></td>
+                                <td>
+                                    <span class="order-status status-<?php echo esc_attr( $order->get_status() ); ?>">
+                                        <?php echo esc_html( wc_get_order_status_name( $order->get_status() ) ); ?>
+                                    </span>
+                                </td>
+                                <td><?php echo esc_html( $delivery_status ); ?></td>
+                                <td><?php echo esc_html( $payout_status ); ?></td>
+                                <td><?php echo wp_kses_post( $order->get_formatted_order_total() ); ?></td>
+                                <td><?php echo esc_html( $synced_at ? wp_date( get_option( 'date_format' ) . ' ' . get_option( 'time_format' ), strtotime( $synced_at ) ) : '-' ); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <?php if ( $imported_count > 10 ) : ?>
+                    <p>
+                        <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=shop_order&meta_key=_wpns_nalda_order_id&meta_compare=EXISTS' ) ); ?>">
+                            <?php printf( esc_html__( 'View all %d Nalda orders →', 'wp-nalda-sync' ), $imported_count ); ?>
+                        </a>
+                    </p>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
     }
 }

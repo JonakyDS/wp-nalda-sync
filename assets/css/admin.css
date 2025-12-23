@@ -1139,3 +1139,157 @@
         justify-content: center;
     }
 }
+
+/* ==========================================================================
+   Order Sync Page Styles
+   ========================================================================== */
+
+.wpns-info-box {
+    background: #f0f6fc;
+    border: 1px solid #c3c4c7;
+    border-left: 4px solid #2271b1;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.wpns-info-box h3 {
+    margin: 0 0 15px 0;
+    color: #1d2327;
+}
+
+.wpns-info-box ol {
+    margin: 0 0 15px 20px;
+    padding: 0;
+}
+
+.wpns-info-box ol li {
+    margin-bottom: 8px;
+    color: #50575e;
+}
+
+.wpns-info-box a {
+    color: #2271b1;
+}
+
+.wpns-orders-list {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 20px;
+    margin-bottom: 30px;
+}
+
+.wpns-orders-list h3 {
+    margin: 0 0 20px 0;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #f0f0f1;
+    color: #1d2327;
+}
+
+.wpns-orders-list table {
+    margin: 0;
+}
+
+.wpns-orders-list table th {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.wpns-orders-list table td {
+    vertical-align: middle;
+}
+
+.wpns-orders-list .order-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.wpns-orders-list .order-status.status-processing {
+    background: #f0f6fc;
+    color: #2271b1;
+}
+
+.wpns-orders-list .order-status.status-completed {
+    background: #edfaef;
+    color: #00a32a;
+}
+
+.wpns-orders-list .order-status.status-pending {
+    background: #fcf9e8;
+    color: #996800;
+}
+
+.wpns-orders-list .order-status.status-on-hold {
+    background: #fcf9e8;
+    color: #996800;
+}
+
+.wpns-orders-list .order-status.status-cancelled,
+.wpns-orders-list .order-status.status-failed,
+.wpns-orders-list .order-status.status-refunded {
+    background: #fcf0f1;
+    color: #d63638;
+}
+
+/* Card styles for stats */
+.wpns-card-stats p {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.wpns-card-stats p:last-child {
+    border-bottom: none;
+}
+
+/* Action result for orders page */
+#wpns-order-action-result {
+    margin-top: 15px;
+    padding: 12px 15px;
+    border-radius: 4px;
+    display: none;
+}
+
+#wpns-order-action-result.success {
+    background: #edfaef;
+    color: #00a32a;
+    border: 1px solid #00a32a;
+    display: block;
+}
+
+#wpns-order-action-result.error {
+    background: #fcf0f1;
+    color: #d63638;
+    border: 1px solid #d63638;
+    display: block;
+}
+
+#wpns-order-action-result.loading {
+    background: #f0f6fc;
+    color: #2271b1;
+    border: 1px solid #2271b1;
+    display: block;
+}
+
+/* Link button in cards */
+.wpns-card-actions a.button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 10px 15px;
+    text-decoration: none;
+}
+
+.wpns-card-actions a.button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}

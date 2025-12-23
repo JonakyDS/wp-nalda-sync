@@ -63,6 +63,12 @@
                 e.stopPropagation();
                 WPNSAdmin.toggleRunDetails.call(WPNSAdmin, e);
             });
+
+            // Nalda API test connection
+            $('#wpns-test-nalda-api').on('click', this.testNaldaAPI.bind(this));
+
+            // Run order sync manually
+            $('#wpns-run-order-sync').on('click', this.runOrderSync.bind(this));
         },
 
         /**
@@ -406,6 +412,150 @@
                 $details.slideDown(200);
                 $toggle.attr('aria-expanded', 'true');
             }
+        },
+
+        /**
+         * Show result message for order sync page
+         *
+         * @param {string} message Message to display
+         * @param {string} type Message type (success, error, loading)
+         */
+        showOrderResult: function (message, type) {
+            const $result = $('#wpns-order-action-result');
+            $result
+                .removeClass('success error loading')
+                .addClass(type)
+                .html(message)
+                .show();
+
+            if (type !== 'loading') {
+                setTimeout(function () {
+                    $result.fadeOut();
+                }, 15000);
+            }
+        },
+
+        /**
+         * Test Nalda API connection
+         *
+         * @param {Event} e Click event
+         */
+        testNaldaAPI: function (e) {
+            e.preventDefault();
+
+            const $button = $('#wpns-test-nalda-api');
+            const originalText = $button.html();
+
+            $button.prop('disabled', true).html(
+                '<span class="dashicons dashicons-update wpns-spinning"></span> ' +
+                (wpns_admin.strings.testing || 'Testing...')
+            );
+
+            this.showOrderResult(wpns_admin.strings.testing || 'Testing API connection...', 'loading');
+
+            $.ajax({
+                url: wpns_admin.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'wpns_test_nalda_api',
+                    nonce: wpns_admin.nonce
+                },
+                success: function (response) {
+                    if (response.success) {
+                        WPNSAdmin.showOrderResult(
+                            '<span class="dashicons dashicons-yes-alt"></span> ' + response.data,
+                            'success'
+                        );
+                    } else {
+                        WPNSAdmin.showOrderResult(
+                            '<span class="dashicons dashicons-warning"></span> ' + (wpns_admin.strings.error || 'Error:') + ' ' + response.data,
+                            'error'
+                        );
+                    }
+                },
+                error: function (xhr, status, error) {
+                    WPNSAdmin.showOrderResult(
+                        '<span class="dashicons dashicons-warning"></span> ' + (wpns_admin.strings.error || 'Error:') + ' ' + error,
+                        'error'
+                    );
+                },
+                complete: function () {
+                    $button.prop('disabled', false).html(originalText);
+                }
+            });
+        },
+
+        /**
+         * Run order sync manually
+         *
+         * @param {Event} e Click event
+         */
+        runOrderSync: function (e) {
+            e.preventDefault();
+
+            const $button = $('#wpns-run-order-sync');
+            const originalText = $button.html();
+
+            $button.prop('disabled', true).html(
+                '<span class="dashicons dashicons-update wpns-spinning"></span> ' +
+                (wpns_admin.strings.importing_orders || 'Importing orders...')
+            );
+
+            this.showOrderResult(wpns_admin.strings.importing_orders || 'Importing orders from Nalda...', 'loading');
+
+            $.ajax({
+                url: wpns_admin.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'wpns_run_order_sync',
+                    nonce: wpns_admin.nonce
+                },
+                success: function (response) {
+                    if (response.success) {
+                        let message = '<span class="dashicons dashicons-yes-alt"></span> ' + response.data.message;
+
+                        // Add stats if available
+                        if (response.data.stats) {
+                            const stats = response.data.stats;
+                            message += '<br><small>';
+                            if (typeof stats.fetched !== 'undefined') {
+                                message += 'Fetched: ' + stats.fetched + ' | ';
+                            }
+                            if (typeof stats.imported !== 'undefined') {
+                                message += 'Imported: ' + stats.imported + ' | ';
+                            }
+                            if (typeof stats.updated !== 'undefined') {
+                                message += 'Updated: ' + stats.updated + ' | ';
+                            }
+                            if (typeof stats.skipped !== 'undefined') {
+                                message += 'Skipped: ' + stats.skipped;
+                            }
+                            message += '</small>';
+                        }
+
+                        WPNSAdmin.showOrderResult(message, 'success');
+
+                        // Refresh page after successful sync to update tables
+                        setTimeout(function () {
+                            location.reload();
+                        }, 3000);
+                    } else {
+                        WPNSAdmin.showOrderResult(
+                            '<span class="dashicons dashicons-warning"></span> ' + (wpns_admin.strings.error || 'Error:') + ' ' + response.data,
+                            'error'
+                        );
+                    }
+                },
+                error: function (xhr, status, error) {
+                    WPNSAdmin.showOrderResult(
+                        '<span class="dashicons dashicons-warning"></span> ' + (wpns_admin.strings.error || 'Error:') + ' ' + error,
+                        'error'
+                    );
+                },
+                complete: function () {
+                    $button.prop('disabled', false).html(originalText);
+                }
+            });
         }
     };
 

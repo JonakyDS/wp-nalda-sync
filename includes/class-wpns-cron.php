@@ -36,23 +36,39 @@ class WPNS_Cron {
     private $logger;
 
     /**
-     * Cron hook name
+     * Order Importer instance
+     *
+     * @var WPNS_Order_Importer
+     */
+    private $order_importer;
+
+    /**
+     * Product sync cron hook name
      *
      * @var string
      */
     const CRON_HOOK = 'wpns_sync_event';
 
     /**
+     * Order sync cron hook name
+     *
+     * @var string
+     */
+    const ORDER_SYNC_HOOK = 'wpns_order_sync_event';
+
+    /**
      * Constructor
      *
-     * @param WPNS_CSV_Generator $csv_generator CSV Generator instance.
-     * @param WPNS_SFTP_Uploader $sftp_uploader SFTP Uploader instance.
-     * @param WPNS_Logger        $logger        Logger instance.
+     * @param WPNS_CSV_Generator  $csv_generator  CSV Generator instance.
+     * @param WPNS_SFTP_Uploader  $sftp_uploader  SFTP Uploader instance.
+     * @param WPNS_Logger         $logger         Logger instance.
+     * @param WPNS_Order_Importer $order_importer Order Importer instance (optional).
      */
-    public function __construct( $csv_generator, $sftp_uploader, $logger ) {
-        $this->csv_generator = $csv_generator;
-        $this->sftp_uploader = $sftp_uploader;
-        $this->logger        = $logger;
+    public function __construct( $csv_generator, $sftp_uploader, $logger, $order_importer = null ) {
+        $this->csv_generator  = $csv_generator;
+        $this->sftp_uploader  = $sftp_uploader;
+        $this->logger         = $logger;
+        $this->order_importer = $order_importer;
 
         $this->init_hooks();
     }
@@ -64,11 +80,13 @@ class WPNS_Cron {
         // Register custom cron schedules
         add_filter( 'cron_schedules', array( $this, 'add_cron_schedules' ) );
 
-        // Register cron event handler
+        // Register cron event handlers
         add_action( self::CRON_HOOK, array( $this, 'execute_sync' ) );
+        add_action( self::ORDER_SYNC_HOOK, array( $this, 'execute_order_sync' ) );
 
-        // Schedule initial event if enabled
+        // Schedule initial events if enabled
         add_action( 'init', array( $this, 'maybe_schedule_event' ) );
+        add_action( 'init', array( $this, 'maybe_schedule_order_sync' ) );
     }
 
     /**
@@ -165,6 +183,245 @@ class WPNS_Cron {
         } else {
             $this->unschedule();
         }
+    }
+
+    /**
+     * Maybe schedule order sync on init
+     */
+    public function maybe_schedule_order_sync() {
+        $settings = get_option( 'wpns_settings', array() );
+
+        if ( empty( $settings['order_sync_enabled'] ) ) {
+            return;
+        }
+
+        if ( ! wp_next_scheduled( self::ORDER_SYNC_HOOK ) ) {
+            $this->schedule_order_sync( $settings['order_sync_schedule'] ?? 'hourly' );
+        }
+    }
+
+    /**
+     * Schedule the order sync event
+     *
+     * @param string $recurrence Schedule recurrence.
+     * @return bool
+     */
+    public function schedule_order_sync( $recurrence = 'hourly' ) {
+        // Clear any existing schedule
+        $this->unschedule_order_sync();
+
+        // Schedule new event starting 1 minute from now
+        $first_run = time() + MINUTE_IN_SECONDS;
+        $result = wp_schedule_event( $first_run, $recurrence, self::ORDER_SYNC_HOOK );
+
+        if ( $result ) {
+            $this->logger->info(
+                sprintf( __( 'Order sync scheduled: %s', 'wp-nalda-sync' ), $recurrence )
+            );
+        }
+
+        return $result !== false;
+    }
+
+    /**
+     * Unschedule the order sync event
+     */
+    public function unschedule_order_sync() {
+        $timestamp = wp_next_scheduled( self::ORDER_SYNC_HOOK );
+
+        if ( $timestamp ) {
+            wp_unschedule_event( $timestamp, self::ORDER_SYNC_HOOK );
+            $this->logger->info( __( 'Order sync unscheduled', 'wp-nalda-sync' ) );
+        }
+
+        // Also clear all scheduled hooks with this name
+        wp_clear_scheduled_hook( self::ORDER_SYNC_HOOK );
+    }
+
+    /**
+     * Reschedule the order sync event
+     *
+     * @param bool   $enabled    Whether order sync is enabled.
+     * @param string $recurrence Schedule recurrence.
+     */
+    public function reschedule_order_sync( $enabled, $recurrence ) {
+        if ( $enabled ) {
+            $this->schedule_order_sync( $recurrence );
+        } else {
+            $this->unschedule_order_sync();
+        }
+    }
+
+    /**
+     * Execute the order sync (cron handler)
+     */
+    public function execute_order_sync() {
+        // Increase execution time for scheduled runs
+        if ( function_exists( 'set_time_limit' ) ) {
+            @set_time_limit( 300 ); // 5 minutes
+        }
+
+        // Increase memory limit if possible
+        if ( function_exists( 'wp_raise_memory_limit' ) ) {
+            wp_raise_memory_limit( 'cron' );
+        }
+
+        // Disable user abort for cron
+        if ( function_exists( 'ignore_user_abort' ) ) {
+            @ignore_user_abort( true );
+        }
+
+        $this->run_order_sync( 'scheduled' );
+    }
+
+    /**
+     * Run the order sync process
+     *
+     * @param string $trigger How the sync was triggered (scheduled, manual).
+     * @return array Result array.
+     */
+    public function run_order_sync( $trigger = 'manual' ) {
+        $start_time = microtime( true );
+
+        // Start a new run and get the run ID
+        $run_id = $this->logger->start_run( $trigger . '_order_sync' );
+
+        try {
+            // Check if WooCommerce is active
+            if ( ! class_exists( 'WooCommerce' ) ) {
+                $message = __( 'WooCommerce is not active.', 'wp-nalda-sync' );
+                $this->logger->log_sync_failure( $message );
+                $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+                return array(
+                    'success' => false,
+                    'message' => $message,
+                );
+            }
+
+            // Check if order importer is available
+            if ( ! $this->order_importer ) {
+                $message = __( 'Order importer is not initialized.', 'wp-nalda-sync' );
+                $this->logger->log_sync_failure( $message );
+                $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+                return array(
+                    'success' => false,
+                    'message' => $message,
+                );
+            }
+
+            // Get settings
+            $settings = get_option( 'wpns_settings', array() );
+
+            if ( empty( $settings['nalda_api_key'] ) ) {
+                $message = __( 'Nalda API key is not configured.', 'wp-nalda-sync' );
+                $this->logger->log_sync_failure( $message );
+                $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+                return array(
+                    'success' => false,
+                    'message' => $message,
+                );
+            }
+
+            // Get date range setting
+            $range = $settings['order_sync_range'] ?? 'today';
+
+            // Run the import
+            $this->logger->info( sprintf( __( 'Starting order sync from Nalda (range: %s)...', 'wp-nalda-sync' ), $range ) );
+            $result = $this->order_importer->import_orders( $range );
+
+            // Calculate duration
+            $duration = round( microtime( true ) - $start_time, 2 );
+
+            if ( ! $result['success'] ) {
+                $this->logger->log_sync_failure( $result['message'] );
+                $this->update_last_order_sync( 'failed', $result['stats'] ?? array() );
+                $this->logger->end_run( 'failed', array( 'reason' => $result['message'] ) );
+                return $result;
+            }
+
+            // Log success
+            $stats = array_merge( $result['stats'] ?? array(), array(
+                'trigger'          => $trigger,
+                'duration_seconds' => $duration,
+                'range'            => $range,
+            ) );
+
+            // Update last run info
+            $this->update_last_order_sync( 'success', $stats );
+
+            // Save import stats
+            $this->order_importer->save_import_stats( $stats );
+
+            // End the run with success
+            $this->logger->end_run( 'success', $stats );
+
+            return array(
+                'success' => true,
+                'message' => $result['message'],
+                'stats'   => $stats,
+            );
+
+        } catch ( Exception $e ) {
+            $message = sprintf( __( 'Order sync failed with exception: %s', 'wp-nalda-sync' ), $e->getMessage() );
+            $this->logger->error( $message, array(
+                'exception' => $e->getMessage(),
+                'file'      => $e->getFile(),
+                'line'      => $e->getLine(),
+            ) );
+            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+            $this->update_last_order_sync( 'failed', array() );
+            return array(
+                'success' => false,
+                'message' => $message,
+            );
+        } catch ( Error $e ) {
+            $message = sprintf( __( 'Order sync failed with error: %s', 'wp-nalda-sync' ), $e->getMessage() );
+            $this->logger->error( $message, array(
+                'error' => $e->getMessage(),
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
+            ) );
+            $this->logger->end_run( 'failed', array( 'reason' => $message ) );
+            $this->update_last_order_sync( 'failed', array() );
+            return array(
+                'success' => false,
+                'message' => $message,
+            );
+        }
+    }
+
+    /**
+     * Update last order sync information
+     *
+     * @param string $status Run status.
+     * @param array  $stats  Additional statistics.
+     */
+    private function update_last_order_sync( $status, $stats = array() ) {
+        $last_sync = array(
+            'time'   => time(),
+            'status' => $status,
+            'stats'  => $stats,
+        );
+
+        update_option( 'wpns_last_order_sync', $last_sync );
+    }
+
+    /**
+     * Get last order sync information
+     *
+     * @return array
+     */
+    public function get_last_order_sync() {
+        return get_option( 'wpns_last_order_sync', array() );
+    }
+
+    /**
+     * Get next scheduled order sync time
+     *
+     * @return int|false Timestamp or false if not scheduled.
+     */
+    public function get_next_order_sync() {
+        return wp_next_scheduled( self::ORDER_SYNC_HOOK );
     }
 
     /**
@@ -422,6 +679,28 @@ class WPNS_Cron {
             'last_run_count' => $last_run['products_exported'] ?? 0,
             'next_run_time'  => $next_run,
             'is_running'     => $this->is_running(),
+        );
+    }
+
+    /**
+     * Get order sync statistics for dashboard
+     *
+     * @return array
+     */
+    public function get_order_sync_stats() {
+        $last_sync = $this->get_last_order_sync();
+        $next_sync = $this->get_next_order_sync();
+        $settings  = get_option( 'wpns_settings', array() );
+
+        return array(
+            'enabled'          => ! empty( $settings['order_sync_enabled'] ),
+            'schedule'         => $settings['order_sync_schedule'] ?? 'hourly',
+            'schedule_label'   => self::get_schedule_display_name( $settings['order_sync_schedule'] ?? 'hourly' ),
+            'range'            => $settings['order_sync_range'] ?? 'today',
+            'last_sync_time'   => $last_sync['time'] ?? null,
+            'last_sync_status' => $last_sync['status'] ?? null,
+            'last_sync_stats'  => $last_sync['stats'] ?? array(),
+            'next_sync_time'   => $next_sync,
         );
     }
 }
