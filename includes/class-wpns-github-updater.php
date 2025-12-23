@@ -150,6 +150,8 @@ class WPNS_GitHub_Updater {
 
         return $transient;
     }
+
+    /**
      * Check GitHub for updates
      *
      * @param object $transient Update transient.
