@@ -82,7 +82,7 @@ class WPNS_GitHub_Updater {
         // Plugin information popup
         add_filter( 'plugins_api', array( $this, 'plugin_info' ), 20, 3 );
 
-        // After update, clear cache and transients
+        // After update, clear cache
         add_action( 'upgrader_process_complete', array( $this, 'clear_cache' ), 10, 2 );
 
         // Add plugin action links
@@ -91,26 +91,65 @@ class WPNS_GitHub_Updater {
         // Rename the downloaded folder to match plugin slug
         add_filter( 'upgrader_source_selection', array( $this, 'fix_source_dir' ), 10, 4 );
 
-        // Enable auto-updates option for this plugin
+        // Enable auto-updates UI for this plugin
+        add_filter( 'plugins_auto_update_enabled', '__return_true' );
+        
+        // Add plugin to the list of auto-updatable plugins
         add_filter( 'auto_update_plugin', array( $this, 'auto_update_plugin' ), 10, 2 );
-        add_filter( 'plugin_auto_update_setting_html', array( $this, 'auto_update_setting_html' ), 10, 3 );
+        
+        // Inject update info into transient so auto-update UI shows
+        add_filter( 'site_transient_update_plugins', array( $this, 'inject_update_info' ) );
     }
 
     /**
-     * Get the current installed version from the plugin file
+     * Allow auto-updates for this plugin
      *
-     * @return string Current version.
+     * @param bool|null $update Whether to update.
+     * @param object    $item   The update offer.
+     * @return bool|null
      */
-    private function get_installed_version() {
-        if ( ! function_exists( 'get_plugin_data' ) ) {
-            require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    public function auto_update_plugin( $update, $item ) {
+        if ( isset( $item->slug ) && $this->slug === $item->slug ) {
+            // Check if user has enabled auto-updates for this plugin
+            $auto_updates = (array) get_site_option( 'auto_update_plugins', array() );
+            if ( in_array( $this->basename, $auto_updates, true ) ) {
+                return true;
+            }
+        }
+        return $update;
+    }
+
+    /**
+     * Inject update info into the update_plugins transient
+     * This ensures the auto-update UI is displayed
+     *
+     * @param object $transient The update_plugins transient.
+     * @return object
+     */
+    public function inject_update_info( $transient ) {
+        if ( ! is_object( $transient ) ) {
+            $transient = new stdClass();
         }
 
-        $plugin_data = get_plugin_data( WPNS_PLUGIN_FILE );
-        return $plugin_data['Version'] ?? $this->version;
-    }
+        // Ensure no_update array exists and our plugin is in it (for auto-update UI)
+        if ( ! isset( $transient->no_update ) ) {
+            $transient->no_update = array();
+        }
 
-    /**
+        // If plugin is not in response (no update available), add to no_update for auto-update UI
+        if ( ! isset( $transient->response[ $this->basename ] ) && ! isset( $transient->no_update[ $this->basename ] ) ) {
+            $transient->no_update[ $this->basename ] = (object) array(
+                'id'            => "github.com/{$this->repo}",
+                'slug'          => $this->slug,
+                'plugin'        => $this->basename,
+                'new_version'   => $this->version,
+                'url'           => "https://github.com/{$this->repo}",
+                'package'       => '',
+            );
+        }
+
+        return $transient;
+    }
      * Check GitHub for updates
      *
      * @param object $transient Update transient.
@@ -121,14 +160,12 @@ class WPNS_GitHub_Updater {
             return $transient;
         }
 
-        // Get the actual installed version from the plugin file
-        $current_version = $this->get_installed_version();
         $release = $this->get_latest_release();
 
         if ( $release && isset( $release->tag_name ) ) {
             $latest_version = ltrim( $release->tag_name, 'v' );
 
-            if ( version_compare( $current_version, $latest_version, '<' ) ) {
+            if ( version_compare( $this->version, $latest_version, '<' ) ) {
                 $download_url = $this->get_download_url( $release );
 
                 if ( $download_url ) {
@@ -145,9 +182,6 @@ class WPNS_GitHub_Updater {
                         'requires_php'=> '7.4',
                     );
                 }
-            } else {
-                // No update needed - make sure plugin is not in response array
-                unset( $transient->response[ $this->basename ] );
             }
         }
 
@@ -351,80 +385,8 @@ class WPNS_GitHub_Updater {
      */
     public function clear_cache( $upgrader, $options ) {
         if ( 'update' === $options['action'] && 'plugin' === $options['type'] ) {
-            // Clear our GitHub cache
             delete_transient( $this->cache_key );
-
-            // Clear WordPress update transients to force fresh check
-            delete_site_transient( 'update_plugins' );
-
-            // Check if our plugin was updated
-            if ( isset( $options['plugins'] ) && is_array( $options['plugins'] ) ) {
-                if ( in_array( $this->basename, $options['plugins'], true ) ) {
-                    // Our plugin was updated, clear all related caches
-                    wp_clean_plugins_cache();
-                }
-            }
         }
-    }
-
-    /**
-     * Enable auto-updates for this plugin
-     *
-     * @param bool|null $update Whether to auto-update.
-     * @param object    $item   Plugin update data.
-     * @return bool|null
-     */
-    public function auto_update_plugin( $update, $item ) {
-        if ( isset( $item->slug ) && $this->slug === $item->slug ) {
-            // Check if user has enabled auto-updates for this plugin
-            $auto_updates = (array) get_site_option( 'auto_update_plugins', array() );
-            if ( in_array( $this->basename, $auto_updates, true ) ) {
-                return true;
-            }
-        }
-        return $update;
-    }
-
-    /**
-     * Show auto-update setting HTML for this plugin
-     *
-     * @param string $html        The HTML for the auto-update setting.
-     * @param string $plugin_file Plugin file.
-     * @param array  $plugin_data Plugin data.
-     * @return string Modified HTML.
-     */
-    public function auto_update_setting_html( $html, $plugin_file, $plugin_data ) {
-        if ( $this->basename !== $plugin_file ) {
-            return $html;
-        }
-
-        // If HTML is empty, generate it for our plugin
-        if ( empty( $html ) ) {
-            $auto_updates = (array) get_site_option( 'auto_update_plugins', array() );
-            $is_enabled   = in_array( $this->basename, $auto_updates, true );
-
-            if ( $is_enabled ) {
-                $html = sprintf(
-                    '<a href="%s" class="toggle-auto-update aria-button-if-js" data-wp-action="disable">
-                        <span class="dashicons dashicons-update spin hidden" aria-hidden="true"></span>
-                        <span class="label">%s</span>
-                    </a>',
-                    wp_nonce_url( admin_url( 'plugins.php?action=disable-auto-update&plugin=' . urlencode( $this->basename ) ), 'updates' ),
-                    __( 'Disable auto-updates', 'wp-nalda-sync' )
-                );
-            } else {
-                $html = sprintf(
-                    '<a href="%s" class="toggle-auto-update aria-button-if-js" data-wp-action="enable">
-                        <span class="dashicons dashicons-update spin hidden" aria-hidden="true"></span>
-                        <span class="label">%s</span>
-                    </a>',
-                    wp_nonce_url( admin_url( 'plugins.php?action=enable-auto-update&plugin=' . urlencode( $this->basename ) ), 'updates' ),
-                    __( 'Enable auto-updates', 'wp-nalda-sync' )
-                );
-            }
-        }
-
-        return $html;
     }
 
     /**
