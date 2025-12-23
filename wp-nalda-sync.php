@@ -3,7 +3,7 @@
  * Plugin Name: WP Nalda Sync
  * Plugin URI: https://github.com/JonakyDS/wp-nalda-sync
  * Description: Automatically generates product CSV feeds from WooCommerce and uploads them to SFTP servers.
- * Version: 1.0.3
+ * Version: 1.0.11
  * Author: Jonaky Adhikary
  * Author URI: https://jonakyds.com
  * License: GPL v2 or later
@@ -24,7 +24,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 // Plugin constants
-define( 'WPNS_VERSION', '1.0.3' );
+define( 'WPNS_VERSION', '1.0.11' );
 define( 'WPNS_PLUGIN_FILE', __FILE__ );
 define( 'WPNS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPNS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
