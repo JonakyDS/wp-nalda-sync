@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: WP Nalda Sync
- * Plugin URI: https://example.com/wp-nalda-sync
+ * Plugin URI: https://github.com/JonakyDS/wp-nalda-sync
  * Description: Automatically generates product CSV feeds from WooCommerce and uploads them to SFTP servers.
  * Version: 1.0.0
- * Author: Your Name
- * Author URI: https://example.com
+ * Author: Jonaky Adhikary
+ * Author URI: https://jonakyds.com
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: wp-nalda-sync
