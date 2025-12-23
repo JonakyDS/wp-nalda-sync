@@ -131,6 +131,7 @@ final class WP_Nalda_Sync {
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-csv-generator.php';
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-sftp-uploader.php';
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-cron.php';
+        require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-github-updater.php';
 
         // Admin classes
         if ( is_admin() ) {
@@ -160,6 +161,11 @@ final class WP_Nalda_Sync {
      * Initialize plugin components
      */
     public function init_components() {
+        // Initialize GitHub updater (works without WooCommerce)
+        if ( is_admin() ) {
+            new WPNS_GitHub_Updater();
+        }
+
         if ( ! class_exists( 'WooCommerce' ) ) {
             return;
         }
