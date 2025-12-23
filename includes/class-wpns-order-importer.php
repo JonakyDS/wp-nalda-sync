@@ -318,8 +318,10 @@ class WPNS_Order_Importer {
                 $order->update_meta_data( '_wpns_nalda_refund', $nalda_order['refund'] );
             }
 
-            // Calculate totals
-            $order->calculate_totals();
+            // Nalda prices already include tax, so we skip tax calculation
+            // Just recalculate shipping and totals without adding tax
+            $order->set_prices_include_tax( true );
+            $order->calculate_totals( false ); // false = don't recalculate taxes
 
             // Add order note
             $order->add_order_note( 
@@ -456,20 +458,25 @@ class WPNS_Order_Importer {
         // Try to find matching product by GTIN/SKU
         $product = $this->find_product_by_gtin( $item_data['gtin'] ?? '' );
 
+        $quantity = $item_data['quantity'] ?? 1;
+        $price = $item_data['price'] ?? 0;
+
+        // Nalda API returns prices with tax included, so we use the price as-is
+        // and don't let WooCommerce add additional tax
         if ( $product ) {
             // Add as linked product
             $item = new WC_Order_Item_Product();
             $item->set_product( $product );
-            $item->set_quantity( $item_data['quantity'] ?? 1 );
-            $item->set_subtotal( $item_data['price'] ?? 0 );
-            $item->set_total( $item_data['price'] ?? 0 );
+            $item->set_quantity( $quantity );
+            $item->set_subtotal( $price );
+            $item->set_total( $price );
         } else {
             // Add as custom line item
             $item = new WC_Order_Item_Product();
             $item->set_name( $item_data['title'] ?? __( 'Nalda Item', 'wp-nalda-sync' ) );
-            $item->set_quantity( $item_data['quantity'] ?? 1 );
-            $item->set_subtotal( $item_data['price'] ?? 0 );
-            $item->set_total( $item_data['price'] ?? 0 );
+            $item->set_quantity( $quantity );
+            $item->set_subtotal( $price );
+            $item->set_total( $price );
         }
 
         // Store Nalda item metadata
