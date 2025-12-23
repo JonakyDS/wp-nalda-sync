@@ -56,6 +56,7 @@ jobs:
           # Copy plugin files (excluding development files)
           rsync -av --exclude='.git' \
                     --exclude='.github' \
+                    --exclude='.vscode' \
                     --exclude='.gitignore' \
                     --exclude='node_modules' \
                     --exclude='vendor' \
