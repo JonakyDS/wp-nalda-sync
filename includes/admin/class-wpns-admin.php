@@ -274,6 +274,14 @@ class WPNS_Admin {
         );
 
         add_settings_field(
+            'product_sync_default',
+            __( 'Default Product Sync', 'wp-nalda-sync' ),
+            array( $this, 'render_product_sync_default_field' ),
+            'wp-nalda-sync',
+            'wpns_product_section'
+        );
+
+        add_settings_field(
             'delivery_time',
             __( 'Default Delivery Time (days)', 'wp-nalda-sync' ),
             array( $this, 'render_text_field' ),
@@ -432,6 +440,11 @@ class WPNS_Admin {
         $sanitized['delivery_time']    = absint( $input['delivery_time'] ?? 3 );
         $sanitized['return_days']      = absint( $input['return_days'] ?? 14 );
         $sanitized['enabled']          = ! empty( $input['enabled'] );
+
+        // Product sync default setting
+        $sanitized['product_sync_default'] = in_array( $input['product_sync_default'] ?? 'all', array( 'all', 'none' ), true ) 
+            ? $input['product_sync_default'] 
+            : 'all';
 
         // Nalda API settings
         if ( ! empty( $input['nalda_api_key'] ) ) {
@@ -1407,6 +1420,39 @@ class WPNS_Admin {
             <?php endforeach; ?>
         </select>
         <p class="description"><?php esc_html_e( 'Choose whether to create new orders or only update existing ones.', 'wp-nalda-sync' ); ?></p>
+        <?php
+    }
+
+    /**
+     * Render product sync default field
+     */
+    public function render_product_sync_default_field() {
+        $settings = get_option( 'wpns_settings', array() );
+        $default = $settings['product_sync_default'] ?? 'all';
+        $options = array(
+            'all'  => __( 'Sync all products by default (opt-out)', 'wp-nalda-sync' ),
+            'none' => __( 'Sync no products by default (opt-in)', 'wp-nalda-sync' ),
+        );
+        ?>
+        <select id="wpns_product_sync_default" name="wpns_settings[product_sync_default]" class="regular-text">
+            <?php foreach ( $options as $value => $label ) : ?>
+                <option value="<?php echo esc_attr( $value ); ?>" <?php selected( $default, $value ); ?>>
+                    <?php echo esc_html( $label ); ?>
+                </option>
+            <?php endforeach; ?>
+        </select>
+        <p class="description">
+            <?php esc_html_e( 'Choose whether products are synced to Nalda by default. You can override this per product in the product edit screen.', 'wp-nalda-sync' ); ?>
+        </p>
+        <p class="description" style="margin-top: 10px;">
+            <a href="<?php echo esc_url( admin_url( 'edit.php?post_type=product' ) ); ?>" class="button button-secondary">
+                <span class="dashicons dashicons-products" style="margin-top: 3px;"></span>
+                <?php esc_html_e( 'Manage Products', 'wp-nalda-sync' ); ?>
+            </a>
+            <span style="margin-left: 10px;">
+                <?php esc_html_e( 'Use the "Nalda Sync" column and bulk actions to manage product sync settings.', 'wp-nalda-sync' ); ?>
+            </span>
+        </p>
         <?php
     }
 

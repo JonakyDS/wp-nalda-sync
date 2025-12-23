@@ -471,6 +471,14 @@ class WPNS_CSV_Generator {
      * @return array Array of product IDs.
      */
     private function get_products() {
+        // Get product sync settings instance
+        $product_settings = WP_Nalda_Sync::instance()->product_settings;
+        
+        if ( $product_settings ) {
+            return $product_settings->get_syncable_product_ids();
+        }
+
+        // Fallback if product settings not available
         $args = array(
             'status'  => 'publish',
             'limit'   => -1,

@@ -73,6 +73,13 @@ class WPNS_Order_Importer {
     const META_NALDA_FEE = '_wpns_nalda_fee';
 
     /**
+     * Meta key for storing order source
+     *
+     * @var string
+     */
+    const META_ORDER_SOURCE = '_wpns_order_source';
+
+    /**
      * Constructor
      *
      * @param WPNS_Nalda_API $api    Nalda API instance.
@@ -81,6 +88,199 @@ class WPNS_Order_Importer {
     public function __construct( $api, $logger ) {
         $this->api    = $api;
         $this->logger = $logger;
+
+        $this->init_hooks();
+    }
+
+    /**
+     * Initialize hooks for order display customization
+     */
+    private function init_hooks() {
+        // Add source column to orders list
+        add_filter( 'manage_edit-shop_order_columns', array( $this, 'add_order_source_column' ) );
+        add_filter( 'manage_woocommerce_page_wc-orders_columns', array( $this, 'add_order_source_column' ) );
+        add_action( 'manage_shop_order_posts_custom_column', array( $this, 'render_order_source_column' ), 10, 2 );
+        add_action( 'manage_woocommerce_page_wc-orders_custom_column', array( $this, 'render_order_source_column_hpos' ), 10, 2 );
+
+        // Add Nalda info to order details page
+        add_action( 'woocommerce_admin_order_data_after_order_details', array( $this, 'display_nalda_order_info' ) );
+
+        // Customize order emails for Nalda orders
+        add_action( 'woocommerce_email_order_details', array( $this, 'add_nalda_info_to_email' ), 5, 4 );
+        add_filter( 'woocommerce_email_subject_new_order', array( $this, 'customize_email_subject' ), 10, 2 );
+        add_filter( 'woocommerce_email_subject_customer_processing_order', array( $this, 'customize_email_subject' ), 10, 2 );
+        add_filter( 'woocommerce_email_subject_customer_completed_order', array( $this, 'customize_email_subject' ), 10, 2 );
+    }
+
+    /**
+     * Add source column to orders list
+     *
+     * @param array $columns Existing columns.
+     * @return array
+     */
+    public function add_order_source_column( $columns ) {
+        $new_columns = array();
+        
+        foreach ( $columns as $key => $value ) {
+            $new_columns[ $key ] = $value;
+            
+            // Add source column after order status
+            if ( 'order_status' === $key ) {
+                $new_columns['order_source'] = __( 'Source', 'wp-nalda-sync' );
+            }
+        }
+        
+        return $new_columns;
+    }
+
+    /**
+     * Render source column content (legacy posts)
+     *
+     * @param string $column  Column name.
+     * @param int    $post_id Post ID.
+     */
+    public function render_order_source_column( $column, $post_id ) {
+        if ( 'order_source' !== $column ) {
+            return;
+        }
+
+        $order = wc_get_order( $post_id );
+        $this->output_source_badge( $order );
+    }
+
+    /**
+     * Render source column content (HPOS)
+     *
+     * @param string   $column Column name.
+     * @param WC_Order $order  Order object.
+     */
+    public function render_order_source_column_hpos( $column, $order ) {
+        if ( 'order_source' !== $column ) {
+            return;
+        }
+
+        $this->output_source_badge( $order );
+    }
+
+    /**
+     * Output the source badge
+     *
+     * @param WC_Order $order Order object.
+     */
+    private function output_source_badge( $order ) {
+        if ( ! $order ) {
+            return;
+        }
+
+        $source = $order->get_meta( self::META_ORDER_SOURCE );
+        $nalda_order_id = $order->get_meta( self::META_NALDA_ORDER_ID );
+
+        if ( 'NALDA' === $source || ! empty( $nalda_order_id ) ) {
+            echo '<span class="wpns-source-badge nalda" style="background: #6366f1; color: #fff; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: 600;">NALDA</span>';
+        } else {
+            echo '<span class="wpns-source-badge website" style="background: #e5e7eb; color: #374151; padding: 3px 8px; border-radius: 3px; font-size: 11px;">Website</span>';
+        }
+    }
+
+    /**
+     * Display Nalda order info in admin order details
+     *
+     * @param WC_Order $order Order object.
+     */
+    public function display_nalda_order_info( $order ) {
+        $nalda_order_id = $order->get_meta( self::META_NALDA_ORDER_ID );
+        
+        if ( empty( $nalda_order_id ) ) {
+            return;
+        }
+
+        $delivery_status = $order->get_meta( self::META_NALDA_DELIVERY_STATUS );
+        $payout_status = $order->get_meta( self::META_NALDA_PAYOUT_STATUS );
+        $commission = $order->get_meta( self::META_NALDA_COMMISSION );
+        $fee = $order->get_meta( self::META_NALDA_FEE );
+        ?>
+        <div class="order_data_column" style="background: #f0f6fc; padding: 15px; margin-top: 15px; border-radius: 4px;">
+            <h4 style="margin: 0 0 10px; color: #6366f1;">
+                <span class="dashicons dashicons-store" style="margin-right: 5px;"></span>
+                <?php esc_html_e( 'Nalda Marketplace Order', 'wp-nalda-sync' ); ?>
+            </h4>
+            <p><strong><?php esc_html_e( 'Nalda Order ID:', 'wp-nalda-sync' ); ?></strong> <?php echo esc_html( $nalda_order_id ); ?></p>
+            <p><strong><?php esc_html_e( 'Delivery Status:', 'wp-nalda-sync' ); ?></strong> <?php echo esc_html( $delivery_status ); ?></p>
+            <p><strong><?php esc_html_e( 'Payout Status:', 'wp-nalda-sync' ); ?></strong> <?php echo esc_html( $payout_status ); ?></p>
+            <?php if ( $commission ) : ?>
+                <p><strong><?php esc_html_e( 'Commission:', 'wp-nalda-sync' ); ?></strong> <?php echo wc_price( $commission ); ?></p>
+            <?php endif; ?>
+            <?php if ( $fee ) : ?>
+                <p><strong><?php esc_html_e( 'Fee:', 'wp-nalda-sync' ); ?></strong> <?php echo wc_price( $fee ); ?></p>
+            <?php endif; ?>
+            <p style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #c3c4c7; color: #059669; font-weight: 600;">
+                <span class="dashicons dashicons-yes-alt"></span>
+                <?php esc_html_e( 'Payment received via Nalda', 'wp-nalda-sync' ); ?>
+            </p>
+        </div>
+        <?php
+    }
+
+    /**
+     * Add Nalda info to customer emails
+     *
+     * @param WC_Order $order         Order object.
+     * @param bool     $sent_to_admin Whether email is sent to admin.
+     * @param bool     $plain_text    Whether email is plain text.
+     * @param WC_Email $email         Email object.
+     */
+    public function add_nalda_info_to_email( $order, $sent_to_admin, $plain_text, $email ) {
+        $nalda_order_id = $order->get_meta( self::META_NALDA_ORDER_ID );
+        
+        if ( empty( $nalda_order_id ) ) {
+            return;
+        }
+
+        $shop_name = get_bloginfo( 'name' );
+
+        if ( $plain_text ) {
+            echo "\n\n";
+            echo "========================================\n";
+            echo sprintf( __( 'This order was placed at %s via NALDA Marketplace.', 'wp-nalda-sync' ), $shop_name ) . "\n";
+            echo sprintf( __( 'Nalda Order Number: %s', 'wp-nalda-sync' ), $nalda_order_id ) . "\n";
+            echo __( 'Payment Status: PAID (Payment processed via Nalda)', 'wp-nalda-sync' ) . "\n";
+            echo "========================================\n\n";
+        } else {
+            ?>
+            <div style="background: #f0f6fc; border: 1px solid #6366f1; border-radius: 6px; padding: 20px; margin: 20px 0; text-align: center;">
+                <p style="margin: 0 0 10px; font-size: 14px; color: #374151;">
+                    <?php printf( esc_html__( 'This order was placed at %s via', 'wp-nalda-sync' ), esc_html( $shop_name ) ); ?>
+                    <strong style="color: #6366f1;">NALDA Marketplace</strong>
+                </p>
+                <p style="margin: 0 0 10px; font-size: 16px; font-weight: 600; color: #1f2937;">
+                    <?php printf( esc_html__( 'Nalda Order Number: %s', 'wp-nalda-sync' ), esc_html( $nalda_order_id ) ); ?>
+                </p>
+                <p style="margin: 0; color: #059669; font-weight: 600;">
+                    ✓ <?php esc_html_e( 'Payment Status: PAID', 'wp-nalda-sync' ); ?>
+                </p>
+                <p style="margin: 5px 0 0; font-size: 12px; color: #6b7280;">
+                    <?php esc_html_e( '(Payment was processed securely via Nalda)', 'wp-nalda-sync' ); ?>
+                </p>
+            </div>
+            <?php
+        }
+    }
+
+    /**
+     * Customize email subject for Nalda orders
+     *
+     * @param string   $subject Email subject.
+     * @param WC_Order $order   Order object.
+     * @return string
+     */
+    public function customize_email_subject( $subject, $order ) {
+        $nalda_order_id = $order->get_meta( self::META_NALDA_ORDER_ID );
+        
+        if ( ! empty( $nalda_order_id ) ) {
+            $subject = '[NALDA] ' . $subject;
+        }
+        
+        return $subject;
     }
 
     /**
@@ -300,12 +500,18 @@ class WPNS_Order_Importer {
             $order->set_status( $wc_status );
 
             // Store Nalda metadata
+            $order->update_meta_data( self::META_ORDER_SOURCE, 'NALDA' );
             $order->update_meta_data( self::META_NALDA_ORDER_ID, $nalda_order['orderId'] );
             $order->update_meta_data( self::META_NALDA_SYNCED_AT, current_time( 'mysql' ) );
             $order->update_meta_data( self::META_NALDA_DELIVERY_STATUS, $delivery_status );
             $order->update_meta_data( self::META_NALDA_PAYOUT_STATUS, $nalda_order['payoutStatus'] ?? '' );
             $order->update_meta_data( self::META_NALDA_COMMISSION, $nalda_order['commission'] ?? 0 );
             $order->update_meta_data( self::META_NALDA_FEE, $nalda_order['fee'] ?? 0 );
+            $order->update_meta_data( '_paid_date', current_time( 'mysql' ) );
+
+            // Set payment method info
+            $order->set_payment_method( 'nalda' );
+            $order->set_payment_method_title( __( 'Paid via Nalda Marketplace', 'wp-nalda-sync' ) );
 
             // Add collection info if available
             if ( ! empty( $nalda_order['collectionId'] ) ) {
@@ -324,9 +530,12 @@ class WPNS_Order_Importer {
             $order->calculate_totals( false ); // false = don't recalculate taxes
 
             // Add order note
+            $shop_name = get_bloginfo( 'name' );
             $order->add_order_note( 
                 sprintf( 
-                    __( 'Order imported from Nalda Marketplace. Nalda Order ID: %d', 'wp-nalda-sync' ), 
+                    /* translators: 1: shop name, 2: Nalda order ID */
+                    __( 'Order placed at %1$s via NALDA Marketplace. Nalda Order ID: %2$d. Payment Status: PAID (processed via Nalda).', 'wp-nalda-sync' ), 
+                    $shop_name,
                     $nalda_order['orderId'] 
                 ),
                 0, // Not customer note

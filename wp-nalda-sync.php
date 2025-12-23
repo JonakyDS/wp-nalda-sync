@@ -69,6 +69,7 @@ final class WP_Nalda_Sync {
     public $cron;
     public $nalda_api;
     public $order_importer;
+    public $product_settings;
 
     /**
      * Get single instance of the class
@@ -136,6 +137,7 @@ final class WP_Nalda_Sync {
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-github-updater.php';
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-nalda-api.php';
         require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-order-importer.php';
+        require_once WPNS_PLUGIN_DIR . 'includes/class-wpns-product-settings.php';
 
         // Admin classes
         if ( is_admin() ) {
@@ -179,6 +181,7 @@ final class WP_Nalda_Sync {
         $this->sftp_uploader = new WPNS_SFTP_Uploader( $this->logger );
         $this->nalda_api     = new WPNS_Nalda_API( $this->logger );
         $this->order_importer = new WPNS_Order_Importer( $this->nalda_api, $this->logger );
+        $this->product_settings = new WPNS_Product_Settings();
         $this->cron          = new WPNS_Cron( $this->csv_generator, $this->sftp_uploader, $this->logger, $this->order_importer );
 
         if ( is_admin() ) {
@@ -203,6 +206,7 @@ final class WP_Nalda_Sync {
             'enabled'                => false,
             'delivery_time'          => 3,
             'return_days'            => 14,
+            'product_sync_default'   => 'all', // 'all' = sync all by default, 'none' = opt-in
             // Order import settings
             'nalda_api_key'          => '',
             'nalda_api_url'          => 'https://api.nalda.com',
